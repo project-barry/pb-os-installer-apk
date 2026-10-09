@@ -5,10 +5,12 @@ package org.projectbarry.pbosinstaller.device
  *
  * [manufacturer] and [model] must equal Build.MANUFACTURER and Build.MODEL
  * (case is ignored). [images] are the release image names for it, first
- * match wins (pb-os-<tag>-<image>.img.7z.001, ...).
+ * match wins (pb-os-<tag>-<image>.img.7z.001, ...). [shortName] is what the app
+ * calls the handheld in its text ("Your Nova is supported").
  */
 data class TestedDevice(
     val name: String,
+    val shortName: String,
     val soc: Soc,
     val manufacturer: String,
     val model: String,
@@ -24,11 +26,12 @@ object Devices {
     // the "What's in the Report?" pop-up).
     val tested = listOf(
         // Confirmed from getprop on stock Android 13: ro.soc.model QCS8550, ro.board.platform kalama.
-        TestedDevice("Retroid Pocket 6", Soc.SM8550, "Moorechip", "Retroid Pocket 6", listOf("sm8550")),
-        TestedDevice("Retroid Pocket Nova", Soc.SM8550, "Moorechip", "Retroid Pocket Nova", listOf("sm8550")),
+        TestedDevice("Retroid Pocket 6", "RP6", Soc.SM8550, "Moorechip", "Retroid Pocket 6", listOf("sm8550")),
+        TestedDevice("Retroid Pocket Nova", "Nova", Soc.SM8550, "Moorechip", "Retroid Pocket Nova", listOf("sm8550")),
         // Placeholders until someone copies the device info from the real device.
-        TestedDevice("AYN Thor", Soc.SM8550, PLACEHOLDER, PLACEHOLDER, listOf("sm8550")),
-        TestedDevice("KONKR Pocket FIT", Soc.SM8650, PLACEHOLDER, PLACEHOLDER, listOf("pocketfit")),
+        TestedDevice("AYN Thor", "Thor", Soc.SM8550, PLACEHOLDER, PLACEHOLDER, listOf("sm8550")),
+        TestedDevice("KONKR Pocket FIT", "KPF", Soc.SM8650, PLACEHOLDER, PLACEHOLDER, listOf("pocketfit")),
+        // Not tested yet, so not listed: AYANEO Pocket S2 would be "S2" (SM8650, image "pocketfit").
     )
 
     /** Image names to try for an untested device, by chip (only with ALLOW_UNTESTED). */

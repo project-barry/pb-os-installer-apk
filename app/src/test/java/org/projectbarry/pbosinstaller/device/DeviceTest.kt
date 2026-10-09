@@ -28,10 +28,16 @@ class DeviceTest {
 
     @Test fun rp6IsTested() {
         assertEquals("Retroid Pocket 6", Devices.find(info("Moorechip", "Retroid Pocket 6", "QCS8550"))?.name)
+        assertEquals("RP6", Devices.find(info("Moorechip", "Retroid Pocket 6", "QCS8550"))?.shortName)
     }
 
     @Test fun novaIsTested() {
         assertEquals("Retroid Pocket Nova", Devices.find(info("Moorechip", "Retroid Pocket Nova", "QCS8550"))?.name)
+        assertEquals("Nova", Devices.find(info("Moorechip", "Retroid Pocket Nova", "QCS8550"))?.shortName)
+    }
+
+    @Test fun shortNames() {
+        assertEquals(listOf("RP6", "Nova", "Thor", "KPF"), Devices.tested.map { it.shortName })
     }
 
     @Test fun rightModelWrongChipIsNotTested() {

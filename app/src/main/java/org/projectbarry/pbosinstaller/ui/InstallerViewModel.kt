@@ -53,6 +53,10 @@ sealed interface Step {
 class InstallerViewModel(app: Application) : AndroidViewModel(app) {
     val info: DeviceInfo = DeviceInfo.read()
     val tested: TestedDevice? = Devices.find(info)
+    /** Full name with maker, e.g. "Retroid Pocket Nova" (Android's maker and model if untested). */
+    val fullName: String = tested?.name ?: "${info.manufacturer} ${info.model}"
+    /** Short name for a tested handheld ("Nova"), or "handheld" if unknown. */
+    val handheld: String = tested?.shortName ?: "handheld"
     /** True when this build lets untested devices through (gradle -PallowUntested=true). */
     val untestedAllowed = BuildConfig.ALLOW_UNTESTED
 
