@@ -222,6 +222,16 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
         watchJob = viewModelScope.launch {
             while (true) {
                 val status = withContext(Dispatchers.IO) { writer.status() }
+                if (status != null && status.state !in FINISHED && status.ageMs > STALE_MS) {
+                    // The script updates the status every 2 s; silence for a minute means it was stopped.
+                    _step.value = Step.Failed(
+                        "Writing stopped before it finished (the handheld may have restarted Android). " +
+                            "The card is not ready. Write it again.",
+                        back,
+                    )
+                    writer.clear()
+                    return@launch
+                }
                 if (status != null) {
                     when (status.state) {
                         "verifying" -> _step.value = Step.CardCheck(tag, status.done, status.total)
@@ -237,6 +247,11 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
                 kotlinx.coroutines.delay(1000)
             }
         }
+    }
+
+    private companion object {
+        val FINISHED = setOf("done", "failed")
+        const val STALE_MS = 60_000L
     }
 
     /** Opens Retroid's handheld settings, where "Run Script as Root" is; Android settings elsewhere. */

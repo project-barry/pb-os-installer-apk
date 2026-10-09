@@ -38,15 +38,18 @@ class WriteScriptTest {
             "IMAGE_SHA='${"c".repeat(64)}'",
             "sm unmount",
             "expr \"${'$'}(cat /sys/block/${'$'}DEV/size)\" '*' 512", // 64-bit card size
+            "echo 67108864 > ${'$'}VM/dirty_bytes", // no system stall while writing
+            "trap restore_vm EXIT",
         ).forEach { assertTrue(it, it in body) }
+        assertTrue("rereadpt" !in body)
         // No shell arithmetic or -ge/-gt on byte counts: Android's shell is 32-bit.
         assertTrue(Regex("""\* 512|-ge "\$\{?(SIZE|IMAGE_BYTES)""").find(body) == null)
     }
 
     @Test fun launcherIsOneLine() {
-        val l = WriteScript.launcher("/sdcard/x/pbos-write.sh")
+        val l = WriteScript.launcher("/data/media/0/x/pbos-write.sh")
         assertEquals(1, l.trimEnd().lines().size)
-        assertTrue(l.startsWith("nohup sh /sdcard/x/pbos-write.sh"))
+        assertEquals("cp '/data/media/0/x/pbos-write.sh' /data/local/tmp/pbos-write.sh && nohup sh /data/local/tmp/pbos-write.sh >/dev/null 2>&1 &\n", l)
     }
 
     @Test fun quotingSurvivesQuotes() {
@@ -54,7 +57,7 @@ class WriteScriptTest {
     }
 
     @Test fun rootPath() {
-        assertEquals("/sdcard/Android/data/p/files/write/status",
+        assertEquals("/data/media/0/Android/data/p/files/write/status",
             CardWriter.rootPath(File("/storage/emulated/0/Android/data/p/files/write/status")))
     }
 }

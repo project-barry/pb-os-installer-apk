@@ -13,7 +13,8 @@ import java.util.UUID
  * the status file the script keeps up to date.
  */
 class CardWriter(private val context: Context) {
-    data class Status(val job: String, val state: String, val done: Long, val total: Long, val message: String)
+    /** [ageMs]: how long ago the script last updated the status (it does every 2 s). */
+    data class Status(val job: String, val state: String, val done: Long, val total: Long, val message: String, val ageMs: Long)
 
     private val prefs = context.getSharedPreferences("write", Context.MODE_PRIVATE)
     private val dir = File(context.getExternalFilesDir(null), "write")
@@ -62,6 +63,7 @@ class CardWriter(private val context: Context) {
             values["done"]?.toLongOrNull() ?: 0,
             values["total"]?.toLongOrNull() ?: 0,
             values["message"].orEmpty(),
+            System.currentTimeMillis() - statusFile.lastModified(),
         )
     }
 
@@ -96,7 +98,11 @@ class CardWriter(private val context: Context) {
     companion object {
         const val LAUNCHER_STEM = "pbos-write-card"
 
-        /** Shared storage as root's shell sees it ("/sdcard/…"). */
-        fun rootPath(file: File): String = file.absolutePath.replace(Regex("^/storage/emulated/0(?=/)"), "/sdcard")
+        /**
+         * Shared storage as root reaches it underneath Android's storage layer
+         * (/data/media/0/…): processes with files open under /storage/emulated are
+         * killed if the system server restarts (see WriteScript).
+         */
+        fun rootPath(file: File): String = file.absolutePath.replace(Regex("^/storage/emulated/0(?=/)"), "/data/media/0")
     }
 }
