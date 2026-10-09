@@ -57,6 +57,13 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+    packaging {
+        jniLibs {
+            // 7-Zip (lib7zzs.so) must be a real file on disk for the root script to run it.
+            useLegacyPackaging = true
+            keepDebugSymbols += "**/lib7zzs.so"
+        }
+    }
     buildFeatures {
         compose = true
         buildConfig = true

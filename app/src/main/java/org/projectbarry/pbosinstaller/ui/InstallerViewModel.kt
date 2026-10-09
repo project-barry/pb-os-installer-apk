@@ -21,6 +21,7 @@ import org.projectbarry.pbosinstaller.report.ReportSender
 import org.projectbarry.pbosinstaller.storage.SdBlock
 import org.projectbarry.pbosinstaller.storage.SdCard
 import org.projectbarry.pbosinstaller.storage.SdCardWatcher
+import org.projectbarry.pbosinstaller.writer.CardWriter
 
 /** The "Send Device Report" button. */
 sealed interface ReportState {
@@ -45,7 +46,15 @@ sealed interface Step {
     data class Offer(val image: ImageRelease, val needed: Long, val free: Long) : Step
     data class Downloading(val progress: ImageDownloader.Progress) : Step
     data class Verifying(val done: Long, val total: Long) : Step
+    /** Downloaded and checked; waiting for "Write to SD Card". */
     data class Downloaded(val image: ImageRelease) : Step
+    /** The write script is in Downloads; waiting for the user to run it as root. */
+    data class RunScript(val tag: String, val launcher: String) : Step
+    /** The script is running: [phase] is its state (started, checking, unmounting, writing). */
+    data class Writing(val tag: String, val phase: String, val done: Long, val total: Long) : Step
+    /** The script is reading the card back to check it. */
+    data class CardCheck(val tag: String, val done: Long, val total: Long) : Step
+    data class Written(val tag: String) : Step
     /** "Try again" goes back to [back], the step the user was on. */
     data class Failed(val message: String, val back: Step) : Step
 }
@@ -63,6 +72,11 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
     private val watcher = SdCardWatcher(app)
     val card: StateFlow<SdCard?> = watcher.card
     private val downloader = ImageDownloader(app)
+    private val writer = CardWriter(app)
+    /** The checked parts (file, SHA-256) and the image's SHA-256, from the last download. */
+    private var checkedParts: List<Pair<java.io.File, String>>? = null
+    private var imageSha: String? = null
+    private var watchJob: Job? = null
 
     /** False in builds made without the relay address (see docs/HOW-IT-WORKS.md). */
     val reportAvailable = BuildConfig.REPORT_URL.isNotBlank()
@@ -97,7 +111,20 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
         if (info.soc != null) {
             watcher.start()
             viewModelScope.launch { watcher.card.collect { onCard(it) } }
+            resumeWrite()
         }
+    }
+
+    /** A write still running from before the app was closed: show it again. */
+    private fun resumeWrite() {
+        val tag = writer.currentTag ?: return
+        val status = writer.status() ?: return
+        if (status.state == "done" || status.state == "failed") {
+            writer.clear()
+            return
+        }
+        _step.value = Step.Writing(tag, status.state, status.done, status.total)
+        watchWrite(tag, back = Step.Card)
     }
 
     /** Taking the card out goes back to the card step; putting one in never moves on by itself. */
@@ -156,6 +183,9 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
                     val sums = downloader.fetchVerifiedSums(image)
                     val files = downloader.download(image) { _step.value = Step.Downloading(it) }
                     downloader.verify(files, sums) { done, total -> _step.value = Step.Verifying(done, total) }
+                    checkedParts = files.map { it to sums.getValue(it.name) }
+                    imageSha = sums["pb-os-${image.tag}-${image.image}.img"]
+                        ?: throw ImageDownloader.DownloadError("The release's checksum list has no entry for the unpacked image.")
                     Step.Downloaded(image)
                 }
             } catch (e: ImageDownloader.DownloadError) {
@@ -168,11 +198,63 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** "Write to SD Card": prepares the root script and asks the user to run it. */
+    fun prepareWrite() {
+        val downloaded = _step.value as? Step.Downloaded ?: return
+        val parts = checkedParts ?: return
+        val sha = imageSha ?: return
+        val card = watcher.card.value
+        if (card == null || !card.bigEnough) return
+        viewModelScope.launch {
+            _step.value = try {
+                val name = withContext(Dispatchers.IO) { writer.prepare(downloaded.image.tag, parts, sha, card.sizeBytes) }
+                watchWrite(downloaded.image.tag, back = downloaded)
+                Step.RunScript(downloaded.image.tag, name)
+            } catch (e: Exception) {
+                Step.Failed("Couldn't prepare the card write (${e.message}).", downloaded)
+            }
+        }
+    }
+
+    /** Follows the root script through its status file until it finishes. */
+    private fun watchWrite(tag: String, back: Step) {
+        watchJob?.cancel()
+        watchJob = viewModelScope.launch {
+            while (true) {
+                val status = withContext(Dispatchers.IO) { writer.status() }
+                if (status != null) {
+                    when (status.state) {
+                        "verifying" -> _step.value = Step.CardCheck(tag, status.done, status.total)
+                        "done" -> { _step.value = Step.Written(tag); writer.clear(); return@launch }
+                        "failed" -> {
+                            _step.value = Step.Failed(status.message.ifBlank { "Writing the card failed." }, back)
+                            writer.clear()
+                            return@launch
+                        }
+                        else -> _step.value = Step.Writing(tag, status.state, status.done, status.total)
+                    }
+                }
+                kotlinx.coroutines.delay(1000)
+            }
+        }
+    }
+
+    /** Opens Retroid's handheld settings, where "Run Script as Root" is; Android settings elsewhere. */
+    fun handheldSettingsIntent(): android.content.Intent =
+        if (isRetroid) {
+            android.content.Intent().setClassName("com.rp.settings", "com.ro.settings.activity.MainSettingsActivity")
+        } else {
+            android.content.Intent(android.provider.Settings.ACTION_SETTINGS)
+        }.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    /** Retroid handhelds run root scripts from Handheld Settings → Advanced → Run Script as Root. */
+    val isRetroid: Boolean = info.manufacturer.equals("Moorechip", ignoreCase = true)
+
     /** "Try again": back to the step the user was on (the card step if the card is gone). */
     fun retry() {
         val failed = _step.value as? Step.Failed ?: return
         job?.cancel()
-        val needsCard = failed.back is Step.Ready || failed.back is Step.Offer
+        val needsCard = failed.back is Step.Ready || failed.back is Step.Offer || failed.back is Step.Downloaded
         _step.value = if (needsCard && watcher.card.value == null) Step.Card else failed.back
     }
 

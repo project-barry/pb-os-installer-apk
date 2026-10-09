@@ -46,7 +46,7 @@ class SimpleMarkdownTest {
     }
 
     @Test fun licenceTextsReflow() {
-        for (name in listOf("GPL-2.0", "GPL-3.0", "Apache-2.0", "BouncyCastle")) {
+        for (name in listOf("GPL-2.0", "GPL-3.0", "Apache-2.0", "BouncyCastle", "7-Zip")) {
             val paragraphs = SimpleMarkdown.plainParagraphs(File("../LICENSES/$name.txt").readText())
             assertTrue(name, paragraphs.size >= 4)
             assertTrue(name, paragraphs.none { "\n" in it || "  " in it })
@@ -57,7 +57,9 @@ class SimpleMarkdownTest {
     @Test fun licensesPageLinks() {
         val blocks = SimpleMarkdown.parse(File("../docs/LICENSES.md").readText())
         assertEquals(Block.Heading(1, "Licenses"), blocks.first())
-        assertEquals(listOf("https://github.com/project-barry/pb-os-installer-apk"), SimpleMarkdown.links(blocks))
+        val links = SimpleMarkdown.links(blocks)
+        assertEquals("https://github.com/project-barry/pb-os-installer-apk", links.first())
+        assertTrue("https://www.7-zip.org/download.html" in links)
     }
 
     @Test fun numberedItemsAndItalic() {

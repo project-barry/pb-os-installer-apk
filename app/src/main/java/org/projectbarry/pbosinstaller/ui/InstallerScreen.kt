@@ -59,6 +59,7 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.semantics.Role
@@ -257,9 +258,54 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel, modifier
                     Progress(step.done, step.total)
                 }
 
-                is Step.Downloaded -> {
-                    Title("PB-OS ${step.image.tag} is downloaded and checked")
-                    Body("Writing it to the microSD card comes in the next version of this app.")
+                is Step.Downloaded -> WriteStep(step, card, vm, primary)
+
+                is Step.RunScript -> {
+                    val context = LocalContext.current
+                    Title("One more step")
+                    Body("Writing to the card needs root access, which only your handheld's settings can give.")
+                    Body(
+                        if (vm.isRetroid) {
+                            "Open Handheld Settings → Advanced → Run Script as Root, and pick Download → ${step.launcher}. " +
+                                "Then come back here to follow the progress."
+                        } else {
+                            "Run Download → ${step.launcher} as root, then come back here to follow the progress."
+                        }
+                    )
+                    Button(
+                        onClick = { runCatching { context.startActivity(vm.handheldSettingsIntent()) } },
+                        modifier = Modifier.focusRing().focusRequester(primary),
+                    ) { Text(if (vm.isRetroid) "Open Handheld Settings" else "Open Settings") }
+                    Body("Waiting for the script to start…")
+                }
+
+                is Step.Writing -> {
+                    if (step.phase == "writing") {
+                        Title("Writing PB-OS to the card")
+                        Progress(step.done, step.total)
+                        Body("${formatBytes(step.done)} of ${formatBytes(step.total)}")
+                    } else {
+                        Busy(
+                            when (step.phase) {
+                                "checking" -> "Checking the download…"
+                                "unmounting" -> "Getting the card ready…"
+                                else -> "Starting…"
+                            }
+                        )
+                    }
+                    Body("Keep the card in. You can leave the app; writing continues in the background.")
+                }
+
+                is Step.CardCheck -> {
+                    Title("Checking the card")
+                    Progress(step.done, step.total)
+                    Body("Reading the card back to make sure every byte is right · ${formatBytes(step.done)} of ${formatBytes(step.total)}")
+                }
+
+                is Step.Written -> {
+                    Title("PB-OS is on your card!")
+                    Body("PB-OS ${step.tag} was written to the card and checked.")
+                    Body("Next comes the boot menu that starts PB-OS from the card. That's coming in the next version of this app.")
                 }
 
                 is Step.Failed -> {
@@ -270,6 +316,26 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel, modifier
             }
         }
     }
+}
+
+/** Downloaded: the last check before the card is erased and written. */
+@Composable
+private fun WriteStep(step: Step.Downloaded, card: SdCard?, vm: InstallerViewModel, primary: FocusRequester) {
+    Title("PB-OS ${step.image.tag} is ready")
+    Body("It's downloaded and checked. Next, write it to your microSD card.")
+    when {
+        card == null -> Warning("Put the microSD card back in to continue.")
+        !card.bigEnough -> Warning("This card is too small. PB-OS needs a microSD card of 32 GB or bigger.")
+        else -> Warning(
+            "Writing ERASES EVERYTHING on the microSD card" +
+                (card.sizeBytes?.let { " (${formatBytes(it)})" } ?: "") + "."
+        )
+    }
+    Button(
+        onClick = vm::prepareWrite,
+        enabled = card != null && card.bigEnough,
+        modifier = Modifier.focusRing().focusRequester(primary),
+    ) { Text("Write to SD Card") }
 }
 
 /** Insert a card, then Continue: the app never moves on by itself when a card goes in. */

@@ -120,6 +120,7 @@ fun LicensesDialog(onClose: () -> Unit) = DocDialog(
         "GNU General Public License, version 2" to "licenses/GPL-2.0.txt",
         "Apache License 2.0" to "licenses/Apache-2.0.txt",
         "Bouncy Castle Licence" to "licenses/BouncyCastle.txt",
+        "7-Zip licence" to "licenses/7-Zip.txt",
     ),
     onClose = onClose,
 )
