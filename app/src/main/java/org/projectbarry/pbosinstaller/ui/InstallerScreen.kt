@@ -219,7 +219,7 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel, modifier
                     if (vm.tested != null) Body("PB-OS has been tested on the ${vm.fullName}.")
                     Body("Tap the button below to get started.")
                     Button(onClick = vm::lookUpRelease, modifier = Modifier.focusRing().focusRequester(primary)) {
-                        Text("Download PB-OS")
+                        Text("Let's Go!")
                     }
                 }
 
