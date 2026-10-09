@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,6 +27,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -50,6 +52,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.projectbarry.pbosinstaller.BuildConfig
@@ -65,44 +68,43 @@ fun InstallerScreen(vm: InstallerViewModel) {
 
     // Laid out from the window's current size, so it fits any screen shape,
     // rotation or split-screen: side by side when wide, one column otherwise.
+    // The cards scroll together as one page; only the footer stays on screen.
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val gap = if (maxWidth < 400.dp || maxHeight < 400.dp) 12.dp else 20.dp
         val wide = maxWidth >= 560.dp && maxWidth > maxHeight
-        if (wide) {
-            // Two panes side by side, the footer links across the full width under them.
-            Column(Modifier.fillMaxSize().padding(gap)) {
-                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
-                    Column(
-                        Modifier.weight(1.4f).fillMaxHeight().verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(gap),
-                    ) {
-                        Header()
-                        StepCard(step, card, vm)
-                    }
-                    Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) {
-                        DeviceCard(vm)
-                    }
-                }
-                Footer(vm)
-            }
-        } else {
+        Column(Modifier.fillMaxSize()) {
             Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(gap),
+                Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(gap),
                 verticalArrangement = Arrangement.spacedBy(gap),
             ) {
-                Header()
-                StepCard(step, card, vm)
-                DeviceCard(vm)
-                Footer(vm)
+                if (wide) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                        Column(Modifier.weight(1.4f), verticalArrangement = Arrangement.spacedBy(gap)) {
+                            Header()
+                            StepCard(step, card, vm)
+                        }
+                        Column(Modifier.weight(1f)) {
+                            DeviceCard(vm)
+                        }
+                    }
+                } else {
+                    Header()
+                    StepCard(step, card, vm)
+                    DeviceCard(vm)
+                }
             }
+            Footer(vm, gap)
         }
     }
 }
 
-/** App version and the pop-up pages, as links. */
+/**
+ * The footer, always on screen: app version and links on the left, the two
+ * buttons about the install on the right (on a second line when it's narrow).
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Footer(vm: InstallerViewModel) {
+private fun Footer(vm: InstallerViewModel, gap: Dp) {
     var page by remember { mutableStateOf<String?>(null) }
     when (page) {
         "about" -> AboutDialog(onClose = { page = null })
@@ -114,22 +116,26 @@ private fun Footer(vm: InstallerViewModel) {
         "github" -> GitHubDialog(onClose = { page = null })
         "discord" -> DiscordDialog(onClose = { page = null })
     }
-    // First line: the two pages about the install, as buttons; second: version and links.
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { page = "about" }, modifier = Modifier.focusRing()) { Text("How Does it Work?") }
-            OutlinedButton(onClick = { page = "report" }, modifier = Modifier.focusRing()) { Text("What's in the Report?") }
-        }
-        FlowRow {
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    FlowRow(
+        Modifier.fillMaxWidth().padding(horizontal = gap - 8.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 "PB-OS Installer ${BuildConfig.VERSION_NAME}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.align(Alignment.CenterVertically).padding(start = 12.dp, end = 8.dp),
+                modifier = Modifier.padding(start = 8.dp, end = 4.dp),
             )
             TextButton(onClick = { page = "github" }, modifier = Modifier.focusRing()) { Text("GitHub") }
             TextButton(onClick = { page = "discord" }, modifier = Modifier.focusRing()) { Text("Discord") }
             TextButton(onClick = { page = "licenses" }, modifier = Modifier.focusRing()) { Text("Licenses") }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = { page = "about" }, modifier = Modifier.focusRing()) { Text("How Does it Work?") }
+            OutlinedButton(onClick = { page = "report" }, modifier = Modifier.focusRing()) { Text("What's in the Report?") }
         }
     }
 }
