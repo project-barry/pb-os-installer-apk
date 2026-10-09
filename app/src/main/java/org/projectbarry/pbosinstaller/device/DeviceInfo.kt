@@ -17,20 +17,6 @@ data class DeviceInfo(
 ) {
     val soc: Soc? get() = SocCheck.identify(socModel, boardPlatform)
 
-    /** Plain text for the "Copy device info" button. */
-    fun report(): String = """
-        manufacturer=$manufacturer
-        brand=$brand
-        model=$model
-        device=$device
-        product=$product
-        soc_manufacturer=$socManufacturer
-        soc_model=$socModel
-        board_platform=$boardPlatform
-        android=$android
-        fingerprint=$fingerprint
-    """.trimIndent()
-
     companion object {
         /**
          * Debug builds only: pretend to be another device, to try every screen on an

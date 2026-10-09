@@ -1,12 +1,14 @@
 package org.projectbarry.pbosinstaller.ui
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -50,6 +52,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.semantics.Role
@@ -71,6 +74,10 @@ import org.projectbarry.pbosinstaller.storage.SdCard
 fun InstallerScreen(vm: InstallerViewModel) {
     val step by vm.step.collectAsStateWithLifecycle()
     val card by vm.card.collectAsStateWithLifecycle()
+    // A new scroll position for each orientation: rotating starts the page from the
+    // top, in the same frame as the new layout (no scroll animation afterwards).
+    val orientation = LocalConfiguration.current.orientation
+    val scroll = remember(orientation) { ScrollState(0) }
 
     // Laid out from the window's current size, so it fits any screen shape,
     // rotation or split-screen: side by side when wide, one column otherwise.
@@ -80,7 +87,7 @@ fun InstallerScreen(vm: InstallerViewModel) {
         val wide = maxWidth >= 560.dp && maxWidth > maxHeight
         Column(Modifier.fillMaxSize()) {
             Column(
-                Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(gap),
+                Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll).padding(gap),
                 verticalArrangement = Arrangement.spacedBy(gap),
             ) {
                 if (wide) {
@@ -103,6 +110,10 @@ fun InstallerScreen(vm: InstallerViewModel) {
         }
     }
 }
+
+// Tighter than Material's defaults, so the footer fits two lines on narrow screens.
+private val LinkPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+private val FooterButtonPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
 
 /**
  * The footer, always on screen: app version and links on the left, the two
@@ -128,20 +139,27 @@ private fun Footer(vm: InstallerViewModel, gap: Dp) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        // Each group wraps whole links and buttons onto the next line on narrow
+        // screens; their labels never break mid-word.
+        FlowRow {
             Text(
                 "PB-OS Installer ${BuildConfig.VERSION_NAME}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 8.dp, end = 4.dp),
+                softWrap = false,
+                modifier = Modifier.align(Alignment.CenterVertically).padding(start = 8.dp, end = 4.dp),
             )
-            TextButton(onClick = { page = "github" }, modifier = Modifier.focusRing()) { Text("GitHub") }
-            TextButton(onClick = { page = "discord" }, modifier = Modifier.focusRing()) { Text("Discord") }
-            TextButton(onClick = { page = "licenses" }, modifier = Modifier.focusRing()) { Text("Licenses") }
+            TextButton(onClick = { page = "github" }, contentPadding = LinkPadding, modifier = Modifier.focusRing()) { Text("GitHub", softWrap = false) }
+            TextButton(onClick = { page = "discord" }, contentPadding = LinkPadding, modifier = Modifier.focusRing()) { Text("Discord", softWrap = false) }
+            TextButton(onClick = { page = "licenses" }, contentPadding = LinkPadding, modifier = Modifier.focusRing()) { Text("Licenses", softWrap = false) }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { page = "about" }, modifier = Modifier.focusRing()) { Text("How Does it Work?") }
-            OutlinedButton(onClick = { page = "report" }, modifier = Modifier.focusRing()) { Text("What's in the Report?") }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            OutlinedButton(onClick = { page = "about" }, contentPadding = FooterButtonPadding, modifier = Modifier.focusRing()) {
+                Text("How Does it Work?", softWrap = false)
+            }
+            OutlinedButton(onClick = { page = "report" }, contentPadding = FooterButtonPadding, modifier = Modifier.focusRing()) {
+                Text("What's in the Report?", softWrap = false)
+            }
         }
     }
 }
@@ -212,8 +230,8 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel) {
                     )
                     Body(
                         "Got one of those and still see this? Tap " +
-                            (if (vm.reportAvailable) "\"Send Device Report\"" else "\"Copy device info\" and send it to us on Discord") +
-                            " below, so we can add your device."
+                            (if (vm.reportAvailable) "\"Send Device Report\" below" else "\"What's in the Report?\" below, copy the report and send it to us on Discord") +
+                            ", so we can add your device."
                     )
                 }
 
@@ -309,8 +327,6 @@ private fun OfferStep(step: Step.Offer, card: SdCard?, vm: InstallerViewModel, p
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DeviceCard(vm: InstallerViewModel) {
-    val clipboard = LocalClipboardManager.current
-    var open by remember { mutableStateOf(false) }
     val report by vm.report.collectAsStateWithLifecycle()
     var preview by remember { mutableStateOf<Map<String, String>?>(null) }
 
@@ -349,9 +365,6 @@ private fun DeviceCard(vm: InstallerViewModel) {
                 ).joinToString(" · "),
                 style = MaterialTheme.typography.bodyMedium,
             )
-            if (open) {
-                Text(vm.info.report(), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
-            }
             val canSend = report == ReportState.Ready || report == ReportState.Done(ReportSender.Result.FAILED)
             if (vm.reportAvailable) Button(onClick = { preview = vm.reportFields() }, enabled = canSend, modifier = Modifier.focusRing()) {
                 Text(
@@ -362,31 +375,24 @@ private fun DeviceCard(vm: InstallerViewModel) {
                     }
                 )
             }
-            if (vm.reportAvailable) Text(
-                "Send your device report to the Project Barry Discord server, so we can make this app better",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            (report as? ReportState.Done)?.takeIf { vm.reportAvailable }?.let { done ->
+            if (vm.reportAvailable) {
+                val sent = report == ReportState.Done(ReportSender.Result.SENT) ||
+                    report == ReportState.Done(ReportSender.Result.DUPLICATE)
                 Text(
-                    when (done.result) {
-                        ReportSender.Result.SENT -> "Sent. Thanks!"
-                        ReportSender.Result.DUPLICATE -> "We already have this report. Thanks!"
-                        ReportSender.Result.LIMIT -> "Too many reports right now. Please try again later."
-                        ReportSender.Result.FAILED -> "Couldn't send the report. Check Wi-Fi and try again."
+                    if (sent) {
+                        "Thank you for sharing your device info with us, we will use it to make this app better."
+                    } else {
+                        "Send your device report to the Project Barry Discord server, so we can make this app better."
                     },
                     style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            }
-            // Wraps onto a second line on narrow panes (the Nova's right half).
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = { clipboard.setText(AnnotatedString(vm.info.report())) },
-                    modifier = Modifier.focusRing(),
-                ) {
-                    Text("Copy device info")
+                // Only problems get their own line; a sent report changes the text above.
+                when ((report as? ReportState.Done)?.result) {
+                    ReportSender.Result.LIMIT -> Text("Too many reports right now. Please try again later.", style = MaterialTheme.typography.bodyMedium)
+                    ReportSender.Result.FAILED -> Text("Couldn't send the report. Check Wi-Fi and try again.", style = MaterialTheme.typography.bodyMedium)
+                    else -> {}
                 }
-                TextButton(onClick = { open = !open }, modifier = Modifier.focusRing()) { Text(if (open) "Hide details" else "Details") }
             }
         }
     }

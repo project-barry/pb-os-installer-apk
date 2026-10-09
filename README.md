@@ -72,8 +72,8 @@ explaining what the report contains and how we use it, followed by your
 handheld's exact report. You can also read the page here:
 [docs/DEVICE-REPORT.md](docs/DEVICE-REPORT.md).
 
-If you'd rather send it yourself, tap **Copy device info** and paste it to us
-on Discord.
+If you'd rather send it yourself, open **What's in the Report?**, tap **Copy
+device info** under your report and paste it to us on Discord.
 
 ## Getting the app
 

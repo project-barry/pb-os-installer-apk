@@ -1,28 +1,15 @@
 package org.projectbarry.pbosinstaller.ui
 
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.layout.size
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.text.LinkAnnotation
-import androidx.compose.ui.text.TextLinkStyles
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.withLink
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -34,28 +21,43 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -77,8 +79,22 @@ fun ReportInfoDialog(report: String, onClose: () -> Unit) = DocDialog(
         Block.Paragraph(listOf(SimpleMarkdown.Span("This is exactly what Send Device Report would send from this handheld right now:"))),
         Block.Code(report),
     ),
+    bodyEnd = { CopyReportButton(report) },
     onClose = onClose,
 )
+
+/** Copies the report shown above, for sending it by hand (e.g. on Discord). */
+@Composable
+private fun CopyReportButton(report: String) {
+    val clipboard = LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
+    OutlinedButton(
+        onClick = { clipboard.setText(AnnotatedString(report)); copied = true },
+        modifier = Modifier.focusRing(),
+    ) {
+        Text(if (copied) "Copied ✓" else "Copy device info")
+    }
+}
 
 /** "How Does it Work?": docs/ABOUT.md, with a QR code for the app's GitHub page at the bottom. */
 @Composable
@@ -122,6 +138,7 @@ private fun DocDialog(
     fullTexts: List<Pair<String, String>> = emptyList(),
     extra: List<Block> = emptyList(),
     bottomQr: Qr? = null,
+    bodyEnd: (@Composable () -> Unit)? = null,
     onClose: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -139,7 +156,7 @@ private fun DocDialog(
     }
     val title = (blocks.firstOrNull() as? Block.Heading)?.takeIf { it.level == 1 }?.text ?: fallbackTitle
     val body = (if ((blocks.firstOrNull() as? Block.Heading)?.level == 1) blocks.drop(1) else blocks) + extra + appendix
-    PagePopup(title, body, bottomQr, onClose)
+    PagePopup(title, body, bottomQr, onClose, bodyEnd)
 }
 
 /**
@@ -179,7 +196,13 @@ private fun isDiscordInvite(url: String) = "discord.gg/" in url || "discord.com/
 
 /** The pop-up frame: title with ✕, scrolling body, optional QR at the bottom, Close. */
 @Composable
-private fun PagePopup(title: String, body: List<Block>, bottomQr: Qr?, onClose: () -> Unit) {
+private fun PagePopup(
+    title: String,
+    body: List<Block>,
+    bottomQr: Qr?,
+    onClose: () -> Unit,
+    bodyEnd: (@Composable () -> Unit)? = null,
+) {
     val scroll = rememberScrollState()
     val scope = rememberCoroutineScope()
     val rootFocus = remember { FocusRequester() }
@@ -242,6 +265,7 @@ private fun PagePopup(title: String, body: List<Block>, bottomQr: Qr?, onClose: 
                 ) {
                     body.forEach { block -> MarkdownBlock(block, openLink) }
                     bottomQr?.let { QrBlock(it) }
+                    bodyEnd?.invoke()
                 }
                 Row(Modifier.fillMaxWidth().padding(top = 8.dp, end = 12.dp), horizontalArrangement = Arrangement.End) {
                     Button(onClick = onClose, modifier = Modifier.focusRing()) {

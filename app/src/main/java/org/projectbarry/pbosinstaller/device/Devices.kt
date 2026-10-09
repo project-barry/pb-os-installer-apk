@@ -20,7 +20,8 @@ object Devices {
     private const val PLACEHOLDER = "PLACEHOLDER"
 
     // Only devices pb-os was tested on (see the pb-os README). To add one, get
-    // its strings from the app's "Copy device info" button.
+    // its strings from a device report ("Send Device Report", or "Copy device info" in
+    // the "What's in the Report?" pop-up).
     val tested = listOf(
         // Confirmed from getprop on stock Android 13: ro.soc.model QCS8550, ro.board.platform kalama.
         TestedDevice("Retroid Pocket 6", Soc.SM8550, "Moorechip", "Retroid Pocket 6", listOf("sm8550")),
