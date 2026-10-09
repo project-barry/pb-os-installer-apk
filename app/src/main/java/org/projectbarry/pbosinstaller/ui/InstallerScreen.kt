@@ -2,7 +2,6 @@ package org.projectbarry.pbosinstaller.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -45,13 +44,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
@@ -145,8 +149,9 @@ private fun Footer(vm: InstallerViewModel, gap: Dp) {
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         // Each group wraps whole links and buttons onto the next line on narrow
-        // screens; their labels never break mid-word.
-        FlowRow {
+        // screens; their labels never break mid-word. The small gaps leave room for
+        // the focus outline.
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
                 "PB-OS Installer ${BuildConfig.VERSION_NAME}",
                 style = MaterialTheme.typography.bodySmall,
@@ -244,7 +249,7 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel, modifier
                     val p = step.progress
                     Progress(p.done, p.total)
                     Body("Part ${p.part} of ${p.parts} · ${formatBytes(p.done)} of ${formatBytes(p.total)}")
-                    Body("You can leave the app. The download keeps going in the background.")
+                    Body("The download will continue in the background.")
                 }
 
                 is Step.Verifying -> {
@@ -402,13 +407,29 @@ private fun DeviceCard(vm: InstallerViewModel, modifier: Modifier = Modifier) {
     }
 }
 
-/** A clear outline on the focused control, for d-pad and controller users. */
+/**
+ * A clear outline on the focused control, for d-pad and controller users: drawn
+ * just outside the control in the control's own [shape] (pill for buttons). The
+ * app turns off Android's invisible minimum touch padding (MainActivity), so a
+ * button's bounds are its visible edges and the outline follows them exactly.
+ */
 @Composable
 internal fun Modifier.focusRing(shape: Shape = RoundedCornerShape(50)): Modifier {
     var focused by remember { mutableStateOf(false) }
+    val color = MaterialTheme.colorScheme.primary
     return this
         .onFocusChanged { focused = it.isFocused }
-        .border(3.dp, if (focused) MaterialTheme.colorScheme.primary else Color.Transparent, shape)
+        .drawWithContent {
+            drawContent()
+            if (focused) {
+                val stroke = 3.dp.toPx()
+                val inset = 3.dp.toPx() + stroke / 2
+                val outline = shape.createOutline(
+                    Size(size.width + 2 * inset, size.height + 2 * inset), layoutDirection, this,
+                )
+                translate(-inset, -inset) { drawOutline(outline, color, style = Stroke(stroke)) }
+            }
+        }
 }
 
 @Composable
