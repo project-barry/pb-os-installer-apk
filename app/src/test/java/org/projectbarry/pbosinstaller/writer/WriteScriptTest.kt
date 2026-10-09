@@ -39,7 +39,7 @@ class WriteScriptTest {
             "sm unmount",
             "expr \"${'$'}(cat /sys/block/${'$'}DEV/size)\" '*' 512", // 64-bit card size
             "echo 67108864 > ${'$'}VM/dirty_bytes", // no system stall while writing
-            "trap restore_vm EXIT",
+            "trap 'restore_vm; rm -f /data/local/tmp/pbos-write.sh' EXIT", // settings back, copy gone
         ).forEach { assertTrue(it, it in body) }
         assertTrue("rereadpt" !in body)
         // No shell arithmetic or -ge/-gt on byte counts: Android's shell is 32-bit.
