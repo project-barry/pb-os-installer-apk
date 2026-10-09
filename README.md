@@ -58,31 +58,15 @@ buttons and **A** presses them.
 
 ## My handheld isn't recognised
 
-Tap **Report this device**. The app shows you exactly what it will send, and
-only sends it when you tap **Send**. The report goes to the PB-OS team on
-Discord so we can add your handheld.
+Tap **Send Device Report**. The app shows you exactly what it will send, and
+only sends it when you tap **Send**. The report goes to the Project Barry
+Discord server so we can add your handheld. You can send one a day.
 
-You can send one report a day. If you'd rather send it yourself, tap **Copy
-device info** and paste it to us on Discord.
+**What's in the report?** opens a short page explaining what the report
+contains and how we use it: [docs/DEVICE-REPORT.md](docs/DEVICE-REPORT.md).
 
-### What's in a report?
-
-Only details that are the same on every handheld of your model: the maker,
-the model name, the chip, the Android version, which firmware it runs, the
-name of the memory-card slot, and whether the handheld has a "root" tool. It
-never includes serial numbers, accounts, contacts, location, Wi-Fi details or
-anything you've stored.
-
-**What's "fingerprint"?** Despite the name, it has nothing to do with your
-finger. It's Android's name for the firmware version, for example
-`qti/kalama/kalama:13/TKQ1.231222.001/eng.RPN.20260722.081626:user/release-keys`.
-Every handheld running the same firmware shows exactly the same text. It tells
-us which firmware update you're on.
-
-One part of it, after `eng.`, is the user name of the computer the firmware was
-built on. On firmware from Retroid, AYN or KONKR that's the maker's build
-computer (`RPN` above). Only if you built your own firmware at home would it be
-your own computer's user name.
+If you'd rather send it yourself, tap **Copy device info** and paste it to us
+on Discord.
 
 ## Getting the app
 

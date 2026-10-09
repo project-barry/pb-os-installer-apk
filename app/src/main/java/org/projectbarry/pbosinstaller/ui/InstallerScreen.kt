@@ -40,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -50,6 +51,10 @@ import org.projectbarry.pbosinstaller.device.Devices
 import org.projectbarry.pbosinstaller.report.DeviceReport
 import org.projectbarry.pbosinstaller.report.ReportSender
 import org.projectbarry.pbosinstaller.storage.SdCard
+
+/** Plain-English page on what a device report holds and how it's used. */
+private const val REPORT_INFO_URL =
+    "https://github.com/project-barry/pb-os-installer-apk/blob/main/docs/DEVICE-REPORT.md"
 
 @Composable
 fun InstallerScreen(vm: InstallerViewModel) {
@@ -130,7 +135,7 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel) {
                     )
                     Body(
                         "Got one of those and still see this? Tap " +
-                            (if (vm.reportAvailable) "\"Report this device\"" else "\"Copy device info\" and send it to us on Discord") +
+                            (if (vm.reportAvailable) "\"Send Device Report\"" else "\"Copy device info\" and send it to us on Discord") +
                             " below, so we can add your device."
                     )
                 }
@@ -211,6 +216,7 @@ private fun OfferStep(step: Step.Offer, card: SdCard?, vm: InstallerViewModel) {
 @Composable
 private fun DeviceCard(vm: InstallerViewModel) {
     val clipboard = LocalClipboardManager.current
+    val uriHandler = LocalUriHandler.current
     var open by remember { mutableStateOf(false) }
     val report by vm.report.collectAsStateWithLifecycle()
     var preview by remember { mutableStateOf<Map<String, String>?>(null) }
@@ -218,13 +224,13 @@ private fun DeviceCard(vm: InstallerViewModel) {
     preview?.let { fields ->
         AlertDialog(
             onDismissRequest = { preview = null },
-            title = { Text("Report this device?") },
+            title = { Text("Send device report?") },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        "This goes to the PB-OS team's Discord, so we can add or fix support for this " +
-                            "handheld. It is exactly the text below: model and firmware details that are the " +
-                            "same on every unit, nothing about you."
+                        "This goes to the Project Barry Discord server, so we can add or fix support for " +
+                            "this handheld. It is exactly the text below: model and firmware details that are " +
+                            "the same on every unit, nothing about you."
                     )
                     Text(DeviceReport.text(fields), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
                 }
@@ -258,11 +264,16 @@ private fun DeviceCard(vm: InstallerViewModel) {
                 Text(
                     when (report) {
                         ReportState.Sending -> "Sending…"
-                        ReportState.Done(ReportSender.Result.SENT), ReportState.Done(ReportSender.Result.DUPLICATE) -> "Reported ✓"
-                        else -> "Report this device"
+                        ReportState.Done(ReportSender.Result.SENT), ReportState.Done(ReportSender.Result.DUPLICATE) -> "Report sent ✓"
+                        else -> "Send Device Report"
                     }
                 )
             }
+            if (vm.reportAvailable) Text(
+                "Send your device report to the Project Barry Discord server, so we can make this app better",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             (report as? ReportState.Done)?.takeIf { vm.reportAvailable }?.let { done ->
                 Text(
                     when (done.result) {
@@ -276,6 +287,13 @@ private fun DeviceCard(vm: InstallerViewModel) {
             }
             // Wraps onto a second line on narrow panes (the Nova's right half).
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    // Opens in the default browser; nothing happens if there is none.
+                    onClick = { runCatching { uriHandler.openUri(REPORT_INFO_URL) } },
+                    modifier = Modifier.focusRing(),
+                ) {
+                    Text("What's in the report?")
+                }
                 OutlinedButton(
                     onClick = { clipboard.setText(AnnotatedString(vm.info.report())) },
                     modifier = Modifier.focusRing(),

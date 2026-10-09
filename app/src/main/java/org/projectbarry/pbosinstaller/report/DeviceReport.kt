@@ -4,7 +4,7 @@ import org.projectbarry.pbosinstaller.device.DeviceInfo
 import java.io.File
 
 /**
- * What "Report this device" sends. Built from a fixed list of fields that are
+ * What "Send Device Report" sends. Built from a fixed list of fields that are
  * the same on every unit of a model: no serial numbers, accounts, network or
  * location data. The relay (relay/worker.js) accepts exactly these fields.
  */

@@ -22,7 +22,7 @@ import org.projectbarry.pbosinstaller.storage.SdBlock
 import org.projectbarry.pbosinstaller.storage.SdCard
 import org.projectbarry.pbosinstaller.storage.SdCardWatcher
 
-/** The "Report this device" button. */
+/** The "Send Device Report" button. */
 sealed interface ReportState {
     data object Ready : ReportState
     data object Sending : ReportState
@@ -61,7 +61,7 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
     )
     val report: StateFlow<ReportState> = _report
 
-    /** Exactly what "Report this device" would send, for the preview. */
+    /** Exactly what "Send Device Report" would send, for the preview. */
     fun reportFields(): Map<String, String> =
         DeviceReport.build(info, BuildConfig.VERSION_NAME, SdBlock.find()?.name, DeviceReport.rootKind())
 

@@ -131,9 +131,11 @@ tampered copy, another key and another namespace.
 [report/ReportSender.kt](../app/src/main/java/org/projectbarry/pbosinstaller/report/ReportSender.kt),
 [relay/](../relay/)
 
-**Report this device** posts a JSON object to the relay, a Cloudflare Worker,
+**Send Device Report** posts a JSON object to the relay, a Cloudflare Worker,
 which posts it to a Discord channel. The Discord webhook is a secret of the
-Worker and is never in the app or this repo.
+Worker and is never in the app or this repo. The app's **What's in the
+report?** button opens [DEVICE-REPORT.md](DEVICE-REPORT.md), the plain-English
+version of this section for users.
 
 ### Fields
 
@@ -204,7 +206,7 @@ environment variable `PBOS_REPORT_URL`:
 pbosReportUrl=https://pbos-device-report.<subdomain>.workers.dev/report
 ```
 
-A build without it hides the **Report this device** button; **Copy device
+A build without it hides the **Send Device Report** button; **Copy device
 info** still works. Setting up the relay itself: [relay/README.md](../relay/README.md).
 
 ## Building

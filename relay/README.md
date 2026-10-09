@@ -1,6 +1,6 @@
 # Device-report relay
 
-The app's **Report this device** button sends its device info here. This
+The app's **Send Device Report** button sends its device info here. This
 small Cloudflare Worker checks the report and posts it to a Discord channel.
 The Discord webhook is a secret of the Worker, so it is never in the app or in
 this repo.
