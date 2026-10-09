@@ -80,4 +80,17 @@ up: [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).
 
 ## License
 
-GPL-2.0, see [LICENSE](LICENSE).
+PB-OS Installer is free software under the GNU General Public License,
+version 2 or (at your option) any later version (`GPL-2.0-or-later`).
+
+The app includes libraries under the Apache License 2.0 (AndroidX, Jetpack
+Compose, Kotlin, ZXing), which works with GPL version 3 but not version 2
+alone, so the app as built and installed is distributed under **GPL version
+3**. Bouncy Castle uses an MIT-style licence, which works with both.
+
+- [LICENSE](LICENSE): GPL version 2
+- [LICENSES/](LICENSES/): GPL version 3, Apache License 2.0, Bouncy Castle Licence
+- [docs/LICENSES.md](docs/LICENSES.md): the libraries in the app, also shown in
+  the app under **Licenses**
+- The device-report relay ([relay/](relay/)) is part of this repo and under the
+  same licence.

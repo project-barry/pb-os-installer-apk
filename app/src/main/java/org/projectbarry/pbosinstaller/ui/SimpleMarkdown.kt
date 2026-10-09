@@ -83,5 +83,14 @@ object SimpleMarkdown {
         }
     }.mapNotNull { it.url }
 
+    /**
+     * A plain-text document (a licence) as paragraphs: blank lines separate them,
+     * the hard line wraps inside are joined so the text fits any screen width.
+     */
+    fun plainParagraphs(text: String): List<String> =
+        text.split(Regex("\\n\\s*\\n"))
+            .map { it.trim().replace(Regex("\\s+"), " ") }
+            .filter { it.isNotEmpty() }
+
     private fun plain(text: String) = LINK.replace(text) { it.groupValues[1] }.replace("**", "")
 }

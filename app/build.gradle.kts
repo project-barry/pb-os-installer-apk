@@ -8,17 +8,23 @@ val allowUntested = (findProperty("allowUntested") as String?).toBoolean()
 val reportUrl = ((findProperty("pbosReportUrl") as String?) ?: System.getenv("PBOS_REPORT_URL") ?: "").trim()
 require(reportUrl.isEmpty() || reportUrl.matches(Regex("https://[A-Za-z0-9./_-]+"))) { "pbosReportUrl must be a plain https URL" }
 
-/** Copies docs/DEVICE-REPORT.md into the APK, so the app shows the page as it was at build time. */
-abstract class CopyReportDoc : DefaultTask() {
-    @get:InputFile abstract val doc: RegularFileProperty
+/**
+ * Copies the pages the app shows in pop-ups into the APK: docs/DEVICE-REPORT.md and
+ * docs/LICENSES.md, plus the full licence texts from LICENSES/ under licenses/.
+ * So each build shows them as they were when it was built.
+ */
+abstract class CopyAppDocs : DefaultTask() {
+    @get:InputFiles abstract val docs: ConfigurableFileCollection
+    @get:InputFiles abstract val licenses: ConfigurableFileCollection
     @get:OutputDirectory abstract val outputDir: DirectoryProperty
 
     @TaskAction
     fun copy() {
         val out = outputDir.get().asFile
         out.deleteRecursively()
-        out.mkdirs()
-        doc.get().asFile.copyTo(File(out, "DEVICE-REPORT.md"))
+        File(out, "licenses").mkdirs()
+        docs.forEach { it.copyTo(File(out, it.name)) }
+        licenses.forEach { it.copyTo(File(out, "licenses/${it.name}")) }
     }
 }
 
@@ -79,9 +85,10 @@ dependencies {
 
 androidComponents {
     onVariants { variant ->
-        val copy = tasks.register<CopyReportDoc>("copy${variant.name.replaceFirstChar { it.uppercase() }}ReportDoc") {
-            doc.set(rootProject.layout.projectDirectory.file("docs/DEVICE-REPORT.md"))
+        val copy = tasks.register<CopyAppDocs>("copy${variant.name.replaceFirstChar { it.uppercase() }}AppDocs") {
+            docs.from(rootProject.file("docs/DEVICE-REPORT.md"), rootProject.file("docs/LICENSES.md"))
+            licenses.from(rootProject.fileTree("LICENSES") { include("*.txt") })
         }
-        variant.sources.assets?.addGeneratedSourceDirectory(copy, CopyReportDoc::outputDir)
+        variant.sources.assets?.addGeneratedSourceDirectory(copy, CopyAppDocs::outputDir)
     }
 }

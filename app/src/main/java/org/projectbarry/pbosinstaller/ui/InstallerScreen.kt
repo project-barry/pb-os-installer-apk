@@ -46,6 +46,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.projectbarry.pbosinstaller.BuildConfig
 import org.projectbarry.pbosinstaller.device.Devices
 import org.projectbarry.pbosinstaller.report.DeviceReport
 import org.projectbarry.pbosinstaller.report.ReportSender
@@ -69,6 +70,7 @@ fun InstallerScreen(vm: InstallerViewModel) {
                 ) {
                     Header()
                     StepCard(step, card, vm)
+                    Footer()
                 }
                 Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) {
                     DeviceCard(vm)
@@ -82,8 +84,25 @@ fun InstallerScreen(vm: InstallerViewModel) {
                 Header()
                 StepCard(step, card, vm)
                 DeviceCard(vm)
+                Footer()
             }
         }
+    }
+}
+
+/** App version and the Licenses pop-up. */
+@Composable
+private fun Footer() {
+    var show by remember { mutableStateOf(false) }
+    if (show) LicensesDialog(onClose = { show = false })
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            "PB-OS Installer ${BuildConfig.VERSION_NAME}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.size(8.dp))
+        TextButton(onClick = { show = true }, modifier = Modifier.focusRing()) { Text("Licenses") }
     }
 }
 

@@ -63,21 +63,54 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.projectbarry.pbosinstaller.ui.SimpleMarkdown.Block
 
+/** "What's in the report?": docs/DEVICE-REPORT.md as bundled at build time. */
+@Composable
+fun ReportInfoDialog(onClose: () -> Unit) =
+    DocDialog("DEVICE-REPORT.md", "What's in a device report?", onClose = onClose)
+
+/** "Licenses": docs/LICENSES.md, then the full licence texts, as bundled at build time. */
+@Composable
+fun LicensesDialog(onClose: () -> Unit) = DocDialog(
+    "LICENSES.md",
+    "Licenses",
+    fullTexts = listOf(
+        "GNU General Public License, version 3" to "licenses/GPL-3.0.txt",
+        "GNU General Public License, version 2" to "licenses/GPL-2.0.txt",
+        "Apache License 2.0" to "licenses/Apache-2.0.txt",
+        "Bouncy Castle Licence" to "licenses/BouncyCastle.txt",
+    ),
+    onClose = onClose,
+)
+
 /**
- * "What's in the report?": docs/DEVICE-REPORT.md as it was when this APK was
- * built (copied into the app's assets by the build), shown without a browser.
- * Closes with the Close button, the ✕, Back (controller B) or a tap outside.
+ * A page from the app's assets in a pop-up, without a browser. The build copies
+ * the pages from docs/ and LICENSES/ (app/build.gradle.kts), so the app always
+ * shows them as they were when it was built. [fullTexts] are plain-text
+ * documents (title to asset) added after the page, reflowed to the screen.
+ * Closes with the Close button, the ✕, A, B/Back or a tap outside.
  */
 @Composable
-fun ReportInfoDialog(onClose: () -> Unit) {
+private fun DocDialog(
+    asset: String,
+    fallbackTitle: String,
+    fullTexts: List<Pair<String, String>> = emptyList(),
+    onClose: () -> Unit,
+) {
     val context = LocalContext.current
-    val blocks = remember {
-        runCatching { context.assets.open("DEVICE-REPORT.md").bufferedReader().use { it.readText() } }
-            .map(SimpleMarkdown::parse)
-            .getOrDefault(listOf(Block.Paragraph(listOf(SimpleMarkdown.Span("This page is missing from this build of the app.")))))
+    fun read(path: String) = runCatching { context.assets.open(path).bufferedReader().use { it.readText() } }.getOrNull()
+    val blocks = remember(asset) {
+        read(asset)?.let(SimpleMarkdown::parse)
+            ?: listOf(Block.Paragraph(listOf(SimpleMarkdown.Span("This page is missing from this build of the app."))))
     }
-    val title = (blocks.firstOrNull() as? Block.Heading)?.takeIf { it.level == 1 }?.text ?: "What's in a device report?"
-    val body = if ((blocks.firstOrNull() as? Block.Heading)?.level == 1) blocks.drop(1) else blocks
+    val appendix = remember(fullTexts) {
+        fullTexts.flatMap { (heading, path) ->
+            listOf(Block.Heading(2, heading)) +
+                (read(path)?.let(SimpleMarkdown::plainParagraphs) ?: listOf("Missing from this build."))
+                    .map { Block.Paragraph(listOf(SimpleMarkdown.Span(it))) }
+        }
+    }
+    val title = (blocks.firstOrNull() as? Block.Heading)?.takeIf { it.level == 1 }?.text ?: fallbackTitle
+    val body = (if ((blocks.firstOrNull() as? Block.Heading)?.level == 1) blocks.drop(1) else blocks) + appendix
 
     val scroll = rememberScrollState()
     val scope = rememberCoroutineScope()

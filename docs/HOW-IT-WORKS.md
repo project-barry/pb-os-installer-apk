@@ -136,7 +136,7 @@ which posts it to a Discord channel. The Discord webhook is a secret of the
 Worker and is never in the app or this repo. The app's **What's in the
 report?** button shows [DEVICE-REPORT.md](DEVICE-REPORT.md), the plain-English
 version of this section for users, in a pop-up. The build copies that file
-into the APK (`CopyReportDoc` in `app/build.gradle.kts`), so each build shows
+into the APK (`CopyAppDocs` in `app/build.gradle.kts`), so each build shows
 the page as it was when it was built, with no browser or internet needed.
 
 ### Fields
@@ -210,6 +210,21 @@ pbosReportUrl=https://pbos-device-report.<subdomain>.workers.dev/report
 
 A build without it hides the **Send Device Report** button; **Copy device
 info** still works. Setting up the relay itself: [relay/README.md](../relay/README.md).
+
+## Licences
+
+The app's code is `GPL-2.0-or-later`. Every library in the release APK
+(83 of them, from `./gradlew :app:dependencies --configuration
+releaseRuntimeClasspath`) is under the Apache License 2.0 except Bouncy
+Castle (MIT-style). Apache-2.0 is compatible with GPL version 3 but not
+version 2 alone, so the APK as a whole is distributed under GPL version 3.
+None of the libraries ships a `NOTICE` file.
+
+The **Licenses** button shows [LICENSES.md](LICENSES.md) and the full texts in
+`LICENSES/`, copied into the APK by the build (`CopyAppDocs`), which satisfies
+the Apache and MIT requirement to ship the licence texts with the app. When
+adding a library, check its licence, add it to `LICENSES.md`, and add its
+licence text to `LICENSES/` if it's a new one.
 
 ## Building
 

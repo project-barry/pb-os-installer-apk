@@ -45,6 +45,21 @@ class SimpleMarkdownTest {
         assertEquals(listOf(Block.Heading(2, "See Docs")), SimpleMarkdown.parse("## See [Docs](x)"))
     }
 
+    @Test fun licenceTextsReflow() {
+        for (name in listOf("GPL-2.0", "GPL-3.0", "Apache-2.0", "BouncyCastle")) {
+            val paragraphs = SimpleMarkdown.plainParagraphs(File("../LICENSES/$name.txt").readText())
+            assertTrue(name, paragraphs.size >= 4)
+            assertTrue(name, paragraphs.none { "\n" in it || "  " in it })
+        }
+        assertEquals(listOf("a b", "c"), SimpleMarkdown.plainParagraphs("  a\n   b\n\n\n c\n"))
+    }
+
+    @Test fun licensesPageLinks() {
+        val blocks = SimpleMarkdown.parse(File("../docs/LICENSES.md").readText())
+        assertEquals(Block.Heading(1, "Licenses"), blocks.first())
+        assertEquals(listOf("https://github.com/project-barry/pb-os-installer-apk"), SimpleMarkdown.links(blocks))
+    }
+
     /** The real page: every line of text shows up, and no Markdown marks are left. */
     @Test fun deviceReportPage() {
         val md = File("../docs/DEVICE-REPORT.md").readText()
