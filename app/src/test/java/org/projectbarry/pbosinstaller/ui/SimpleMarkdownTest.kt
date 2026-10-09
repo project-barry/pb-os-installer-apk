@@ -60,6 +60,24 @@ class SimpleMarkdownTest {
         assertEquals(listOf("https://github.com/project-barry/pb-os-installer-apk"), SimpleMarkdown.links(blocks))
     }
 
+    @Test fun numberedItemsAndItalic() {
+        assertEquals(
+            listOf(
+                Block.Bullet(listOf(Span("First thing")), "1."),
+                Block.Bullet(listOf(Span("Second, wrapped (Coming soon)")), "2."),
+                Block.Paragraph(listOf(Span("After."))),
+            ),
+            SimpleMarkdown.parse("1. First thing\n2. Second,\n   wrapped *(Coming soon)*\n\nAfter."),
+        )
+    }
+
+    @Test fun aboutPage() {
+        val blocks = SimpleMarkdown.parse(File("../docs/ABOUT.md").readText())
+        assertEquals(Block.Heading(1, "What this app does"), blocks.first())
+        assertEquals((1..6).map { "$it." }, blocks.filterIsInstance<Block.Bullet>().map { it.marker })
+        assertEquals(listOf("https://github.com/project-barry/pb-os-installer-apk"), SimpleMarkdown.links(blocks))
+    }
+
     /** The real page: every line of text shows up, and no Markdown marks are left. */
     @Test fun deviceReportPage() {
         val md = File("../docs/DEVICE-REPORT.md").readText()

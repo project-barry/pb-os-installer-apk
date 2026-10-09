@@ -69,18 +69,21 @@ fun InstallerScreen(vm: InstallerViewModel) {
         val gap = if (maxWidth < 400.dp || maxHeight < 400.dp) 12.dp else 20.dp
         val wide = maxWidth >= 560.dp && maxWidth > maxHeight
         if (wide) {
-            Row(Modifier.fillMaxSize().padding(gap), horizontalArrangement = Arrangement.spacedBy(gap)) {
-                Column(
-                    Modifier.weight(1.4f).fillMaxHeight().verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(gap),
-                ) {
-                    Header()
-                    StepCard(step, card, vm)
-                    Footer()
+            // Two panes side by side, the footer links across the full width under them.
+            Column(Modifier.fillMaxSize().padding(gap)) {
+                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    Column(
+                        Modifier.weight(1.4f).fillMaxHeight().verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(gap),
+                    ) {
+                        Header()
+                        StepCard(step, card, vm)
+                    }
+                    Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) {
+                        DeviceCard(vm)
+                    }
                 }
-                Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) {
-                    DeviceCard(vm)
-                }
+                Footer()
             }
         } else {
             Column(
@@ -96,19 +99,35 @@ fun InstallerScreen(vm: InstallerViewModel) {
     }
 }
 
-/** App version and the Licenses pop-up. */
+/** App version and the pop-up pages, as links. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Footer() {
-    var show by remember { mutableStateOf(false) }
-    if (show) LicensesDialog(onClose = { show = false })
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            "PB-OS Installer ${BuildConfig.VERSION_NAME}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.size(8.dp))
-        TextButton(onClick = { show = true }, modifier = Modifier.focusRing()) { Text("Licenses") }
+    var page by remember { mutableStateOf<String?>(null) }
+    when (page) {
+        "about" -> AboutDialog(onClose = { page = null })
+        "report" -> ReportInfoDialog(onClose = { page = null })
+        "licenses" -> LicensesDialog(onClose = { page = null })
+        "github" -> GitHubDialog(onClose = { page = null })
+        "discord" -> DiscordDialog(onClose = { page = null })
+    }
+    // First line: the two pages about the install; second: app version and the rest.
+    Column {
+        FlowRow {
+            TextButton(onClick = { page = "about" }, modifier = Modifier.focusRing()) { Text("What this app does") }
+            TextButton(onClick = { page = "report" }, modifier = Modifier.focusRing()) { Text("What's in the report?") }
+        }
+        FlowRow {
+            Text(
+                "PB-OS Installer ${BuildConfig.VERSION_NAME}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.CenterVertically).padding(start = 12.dp, end = 8.dp),
+            )
+            TextButton(onClick = { page = "github" }, modifier = Modifier.focusRing()) { Text("GitHub") }
+            TextButton(onClick = { page = "discord" }, modifier = Modifier.focusRing()) { Text("Discord") }
+            TextButton(onClick = { page = "licenses" }, modifier = Modifier.focusRing()) { Text("Licenses") }
+        }
     }
 }
 
@@ -266,8 +285,6 @@ private fun OfferStep(step: Step.Offer, card: SdCard?, vm: InstallerViewModel, p
 private fun DeviceCard(vm: InstallerViewModel) {
     val clipboard = LocalClipboardManager.current
     var open by remember { mutableStateOf(false) }
-    var showInfo by remember { mutableStateOf(false) }
-    if (showInfo) ReportInfoDialog(onClose = { showInfo = false })
     val report by vm.report.collectAsStateWithLifecycle()
     var preview by remember { mutableStateOf<Map<String, String>?>(null) }
 
@@ -337,9 +354,6 @@ private fun DeviceCard(vm: InstallerViewModel) {
             }
             // Wraps onto a second line on narrow panes (the Nova's right half).
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { showInfo = true }, modifier = Modifier.focusRing()) {
-                    Text("What's in the report?")
-                }
                 OutlinedButton(
                     onClick = { clipboard.setText(AnnotatedString(vm.info.report())) },
                     modifier = Modifier.focusRing(),

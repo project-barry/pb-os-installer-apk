@@ -9,8 +9,9 @@ val reportUrl = ((findProperty("pbosReportUrl") as String?) ?: System.getenv("PB
 require(reportUrl.isEmpty() || reportUrl.matches(Regex("https://[A-Za-z0-9./_-]+"))) { "pbosReportUrl must be a plain https URL" }
 
 /**
- * Copies the pages the app shows in pop-ups into the APK: docs/DEVICE-REPORT.md and
- * docs/LICENSES.md, plus the full licence texts from LICENSES/ under licenses/.
+ * Copies the pages the app shows in pop-ups into the APK: docs/ABOUT.md,
+ * docs/DEVICE-REPORT.md and docs/LICENSES.md, plus the full licence texts from
+ * LICENSES/ under licenses/.
  * So each build shows them as they were when it was built.
  */
 abstract class CopyAppDocs : DefaultTask() {
@@ -86,7 +87,11 @@ dependencies {
 androidComponents {
     onVariants { variant ->
         val copy = tasks.register<CopyAppDocs>("copy${variant.name.replaceFirstChar { it.uppercase() }}AppDocs") {
-            docs.from(rootProject.file("docs/DEVICE-REPORT.md"), rootProject.file("docs/LICENSES.md"))
+            docs.from(
+                rootProject.file("docs/ABOUT.md"),
+                rootProject.file("docs/DEVICE-REPORT.md"),
+                rootProject.file("docs/LICENSES.md"),
+            )
             licenses.from(rootProject.fileTree("LICENSES") { include("*.txt") })
         }
         variant.sources.assets?.addGeneratedSourceDirectory(copy, CopyAppDocs::outputDir)

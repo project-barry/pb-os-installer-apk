@@ -2,7 +2,8 @@ package org.projectbarry.pbosinstaller.ui
 
 /**
  * Just enough Markdown for docs/DEVICE-REPORT.md, which the app shows in a
- * pop-up: "#"/"##" headings, "- " bullets, paragraphs, **bold** and [links](url).
+ * pop-up: "#"/"##" headings, "- " bullets, "1." numbered items, paragraphs,
+ * **bold**, *italic* (shown plain) and [links](url).
  */
 object SimpleMarkdown {
     /** A run of text: bold or not, and a link when [url] is set. */
@@ -11,24 +12,27 @@ object SimpleMarkdown {
     sealed interface Block {
         data class Heading(val level: Int, val text: String) : Block
         data class Paragraph(val spans: List<Span>) : Block
-        data class Bullet(val spans: List<Span>) : Block
+        /** A list item; [marker] is "•" or the item's number, e.g. "3.". */
+        data class Bullet(val spans: List<Span>, val marker: String = "•") : Block
     }
 
     fun parse(markdown: String): List<Block> {
         val blocks = mutableListOf<Block>()
         val paragraph = StringBuilder()
         var bullet: StringBuilder? = null
+        var marker = "•"
 
         fun flush() {
             if (paragraph.isNotBlank()) blocks += Block.Paragraph(inline(paragraph.toString()))
             paragraph.clear()
-            bullet?.let { blocks += Block.Bullet(inline(it.toString())) }
+            bullet?.let { blocks += Block.Bullet(inline(it.toString()), marker) }
             bullet = null
         }
 
         for (raw in markdown.lines()) {
             val line = raw.trimEnd()
             val heading = Regex("^(#{1,6})\\s+(.*)$").find(line)
+            val numbered = Regex("^(\\d+)\\.\\s+(.*)$").find(line)
             when {
                 line.isBlank() -> flush()
                 heading != null -> {
@@ -37,12 +41,18 @@ object SimpleMarkdown {
                 }
                 line.startsWith("- ") || line.startsWith("* ") -> {
                     flush()
+                    marker = "•"
                     bullet = StringBuilder(line.drop(2).trim())
+                }
+                numbered != null -> {
+                    flush()
+                    marker = "${numbered.groupValues[1]}."
+                    bullet = StringBuilder(numbered.groupValues[2].trim())
                 }
                 // A line indented under a bullet continues it; any other line continues the paragraph.
                 bullet != null && raw.startsWith(" ") -> bullet!!.append(' ').append(line.trim())
                 else -> {
-                    bullet?.let { blocks += Block.Bullet(inline(it.toString())); bullet = null }
+                    bullet?.let { blocks += Block.Bullet(inline(it.toString()), marker); bullet = null }
                     if (paragraph.isNotEmpty()) paragraph.append(' ')
                     paragraph.append(line.trim())
                 }
@@ -61,7 +71,8 @@ object SimpleMarkdown {
         fun plainText(part: String) {
             part.split("**").forEachIndexed { i, piece ->
                 if (i > 0) bold = !bold
-                if (piece.isNotEmpty()) spans += Span(piece, bold)
+                val text = piece.replace(Regex("\\*([^*]+)\\*"), "$1")
+                if (text.isNotEmpty()) spans += Span(text, bold)
             }
         }
         var at = 0

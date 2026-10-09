@@ -68,6 +68,20 @@ import org.projectbarry.pbosinstaller.ui.SimpleMarkdown.Block
 fun ReportInfoDialog(onClose: () -> Unit) =
     DocDialog("DEVICE-REPORT.md", "What's in a device report?", onClose = onClose)
 
+/** "What this app does": docs/ABOUT.md, with a QR code for the app's GitHub page at the bottom. */
+@Composable
+fun AboutDialog(onClose: () -> Unit) = DocDialog(
+    "ABOUT.md",
+    "What this app does",
+    bottomQr = Qr(REPO_URL, "Scan with your phone to open the app on GitHub", "QR code for PB-OS Installer on GitHub"),
+    onClose = onClose,
+)
+
+private const val REPO_URL = "https://github.com/project-barry/pb-os-installer-apk"
+
+/** A QR code for [url], with a caption under it. */
+data class Qr(val url: String, val caption: String, val description: String)
+
 /** "Licenses": docs/LICENSES.md, then the full licence texts, as bundled at build time. */
 @Composable
 fun LicensesDialog(onClose: () -> Unit) = DocDialog(
@@ -94,6 +108,7 @@ private fun DocDialog(
     asset: String,
     fallbackTitle: String,
     fullTexts: List<Pair<String, String>> = emptyList(),
+    bottomQr: Qr? = null,
     onClose: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -111,7 +126,47 @@ private fun DocDialog(
     }
     val title = (blocks.firstOrNull() as? Block.Heading)?.takeIf { it.level == 1 }?.text ?: fallbackTitle
     val body = (if ((blocks.firstOrNull() as? Block.Heading)?.level == 1) blocks.drop(1) else blocks) + appendix
+    PagePopup(title, body, bottomQr, onClose)
+}
 
+/**
+ * GitHub or Discord: one line of text, the link (tappable) and a QR code for it.
+ * A Discord invite gets its QR code from the paragraph itself; other links get
+ * it at the bottom.
+ */
+@Composable
+private fun LinkDialog(title: String, text: String, url: String, onClose: () -> Unit) {
+    val body = listOf(
+        Block.Paragraph(listOf(SimpleMarkdown.Span(text))),
+        Block.Paragraph(listOf(SimpleMarkdown.Span(url.removePrefix("https://"), url = url))),
+    )
+    val qr = if (isDiscordInvite(url)) null else Qr(url, "Scan with your phone to open it", "QR code for $title")
+    PagePopup(title, body, qr, onClose)
+}
+
+@Composable
+fun GitHubDialog(onClose: () -> Unit) = LinkDialog(
+    "GitHub",
+    "PB-OS Installer's code, releases and documents are on GitHub.",
+    REPO_URL,
+    onClose,
+)
+
+@Composable
+fun DiscordDialog(onClose: () -> Unit) = LinkDialog(
+    "Discord",
+    "Join the Project Barry community on Discord for help, news and testing.",
+    DISCORD_URL,
+    onClose,
+)
+
+private const val DISCORD_URL = "https://discord.gg/euPurKCWc4"
+
+private fun isDiscordInvite(url: String) = "discord.gg/" in url || "discord.com/invite/" in url
+
+/** The pop-up frame: title with ✕, scrolling body, optional QR at the bottom, Close. */
+@Composable
+private fun PagePopup(title: String, body: List<Block>, bottomQr: Qr?, onClose: () -> Unit) {
     val scroll = rememberScrollState()
     val scope = rememberCoroutineScope()
     val rootFocus = remember { FocusRequester() }
@@ -173,8 +228,9 @@ private fun DocDialog(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     body.forEach { block -> MarkdownBlock(block, openLink) }
+                    bottomQr?.let { QrBlock(it) }
                 }
-                Row(Modifier.fillMaxWidth().padding(top = 16.dp, end = 12.dp), horizontalArrangement = Arrangement.End) {
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp, end = 12.dp), horizontalArrangement = Arrangement.End) {
                     Button(onClick = onClose, modifier = Modifier.focusRing()) {
                         Text("Close")
                     }
@@ -206,21 +262,23 @@ private fun MarkdownBlock(block: Block, openLink: (String) -> Unit) {
         )
         is Block.Paragraph -> {
             Text(annotated(block.spans, linkColor, openLink), style = MaterialTheme.typography.bodyLarge)
-            block.spans.mapNotNull { it.url }.filter { "discord.gg/" in it || "discord.com/invite/" in it }
-                .distinct().forEach { DiscordQr(it) }
+            block.spans.mapNotNull { it.url }.filter(::isDiscordInvite)
+                .distinct().forEach {
+                    QrBlock(Qr(it, "Scan with your phone to join our Discord", "QR code for the Project Barry Discord"))
+                }
         }
         is Block.Bullet -> Row {
-            Text("•  ", style = MaterialTheme.typography.bodyLarge)
+            Text("${block.marker}  ", style = MaterialTheme.typography.bodyLarge)
             Text(annotated(block.spans, linkColor, openLink), style = MaterialTheme.typography.bodyLarge)
         }
     }
 }
 
-/** A scannable code for a Discord invite, for joining from a phone. */
+/** A scannable code, for opening a link on a phone. */
 @Composable
-private fun DiscordQr(url: String) {
-    val bitmap = remember(url) {
-        val modules = QrCode.modules(url)
+private fun QrBlock(qr: Qr) {
+    val bitmap = remember(qr.url) {
+        val modules = QrCode.modules(qr.url)
         val size = modules.size
         val pixels = IntArray(size * size) { i ->
             if (modules[i / size][i % size]) android.graphics.Color.BLACK else android.graphics.Color.WHITE
@@ -235,12 +293,12 @@ private fun DiscordQr(url: String) {
         // Dark on white with a quiet zone, the way phone cameras read best; sharp module edges.
         Image(
             bitmap = bitmap,
-            contentDescription = "QR code for the Project Barry Discord",
+            contentDescription = qr.description,
             filterQuality = FilterQuality.None,
-            modifier = Modifier.size(168.dp).clip(RoundedCornerShape(8.dp)),
+            modifier = Modifier.size(140.dp).clip(RoundedCornerShape(8.dp)),
         )
         Text(
-            "Scan with your phone to join our Discord",
+            qr.caption,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
