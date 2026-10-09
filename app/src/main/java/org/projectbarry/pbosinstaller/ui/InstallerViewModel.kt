@@ -22,6 +22,9 @@ import org.projectbarry.pbosinstaller.storage.SdBlock
 import org.projectbarry.pbosinstaller.storage.SdCard
 import org.projectbarry.pbosinstaller.storage.SdCardWatcher
 import org.projectbarry.pbosinstaller.writer.CardWriter
+import org.projectbarry.pbosinstaller.abl.AblKnown
+import org.projectbarry.pbosinstaller.abl.AblScript
+import org.projectbarry.pbosinstaller.abl.AblSetup
 
 /** The "Send Device Report" button. */
 sealed interface ReportState {
@@ -55,6 +58,16 @@ sealed interface Step {
     /** The script is reading the card back to check it. */
     data class CardCheck(val tag: String, val done: Long, val total: Long) : Step
     data class Written(val tag: String) : Step
+    /** Boot menu: waiting for "Back Up Boot Loader". */
+    data object BootMenu : Step
+    /** A boot loader job ([job]) is saved in Downloads; waiting for the user to run it as root. */
+    data class AblRunScript(val job: String, val launcher: String) : Step
+    data class AblWorking(val job: String) : Step
+    /** Backed up; [slotA]/[slotB] say what each slot holds. Waiting for the 5-tap confirm. */
+    data class AblBackedUp(val slotA: String, val slotB: String, val documents: String?) : Step
+    /** Waiting for "Install Boot Menu". */
+    data object AblInstallReady : Step
+    data object BootMenuDone : Step
     /** "Try again" goes back to [back], the step the user was on. */
     data class Failed(val message: String, val back: Step) : Step
 }
@@ -207,9 +220,17 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
         if (card == null || !card.bigEnough) return
         viewModelScope.launch {
             _step.value = try {
-                val name = withContext(Dispatchers.IO) { writer.prepare(downloaded.image.tag, parts, sha, card.sizeBytes) }
-                watchWrite(downloaded.image.tag, back = downloaded)
-                Step.RunScript(downloaded.image.tag, name)
+                val tag = downloaded.image.tag
+                val launcher = withContext(Dispatchers.IO) { writer.prepare(tag, parts, sha, card.sizeBytes) }
+                watchWrite(tag, back = downloaded)
+                if (launcher != null) {
+                    Step.RunScript(tag, launcher)
+                } else if (withContext(Dispatchers.IO) { writer.start() }) {
+                    // The handheld lets the app run it as root itself (xsu): no detour.
+                    Step.Writing(tag, "started", 0, 0)
+                } else {
+                    Step.Failed("Couldn't start the card write as root.", downloaded)
+                }
             } catch (e: Exception) {
                 Step.Failed("Couldn't prepare the card write (${e.message}).", downloaded)
             }
@@ -252,6 +273,83 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
     private companion object {
         val FINISHED = setOf("done", "failed")
         const val STALE_MS = 60_000L
+    }
+
+    private val abl: AblSetup? = info.soc?.let { AblSetup(app, info, it, tested?.name ?: "${info.manufacturer} ${info.model}") }
+    private var ablWatch: Job? = null
+
+    /** "Set Up Boot Menu" after the card is written. */
+    fun openBootMenu() { _step.value = Step.BootMenu }
+
+    /** "Back Up Boot Loader": copies both ABL slots (changes nothing). */
+    fun backUpBootLoader() = runAbl(AblScript.BACKUP, Step.BootMenu) { it.prepareBackup() }
+
+    /** The 5-tap confirm after the backup was saved somewhere else. */
+    fun backupConfirmed() { _step.value = Step.AblInstallReady }
+
+    /** "Install Boot Menu". */
+    fun installBootMenu() = runAbl(AblScript.INSTALL, Step.AblInstallReady) { it.prepareInstall() }
+
+    fun saveBackupZip(uri: android.net.Uri, onDone: (Boolean) -> Unit) {
+        val setup = abl ?: return
+        viewModelScope.launch {
+            onDone(withContext(Dispatchers.IO) { runCatching { setup.writeZip(uri) }.isSuccess })
+        }
+    }
+
+    fun backupZipName(): String = (abl?.backupName() ?: "PB-OS ABL backup") + ".zip"
+
+    private fun runAbl(job: String, back: Step, prepare: (AblSetup) -> String?) {
+        val setup = abl ?: return
+        viewModelScope.launch {
+            _step.value = try {
+                val launcher = withContext(Dispatchers.IO) { prepare(setup) }
+                watchAbl(setup, job, back)
+                when {
+                    launcher != null -> Step.AblRunScript(job, launcher)
+                    withContext(Dispatchers.IO) { setup.start(job) } -> Step.AblWorking(job)
+                    else -> Step.Failed("Couldn't start the boot loader step as root.", back)
+                }
+            } catch (e: Exception) {
+                Step.Failed("Couldn't prepare the boot loader step (${e.message}).", back)
+            }
+        }
+    }
+
+    private fun watchAbl(setup: AblSetup, job: String, back: Step) {
+        ablWatch?.cancel()
+        ablWatch = viewModelScope.launch {
+            while (true) {
+                val status = withContext(Dispatchers.IO) { setup.status(job) }
+                if (status != null && status.state !in FINISHED && status.ageMs > STALE_MS) {
+                    _step.value = Step.Failed("The boot loader step stopped before it finished. Nothing more was changed; try again.", back)
+                    setup.clear(job)
+                    return@launch
+                }
+                when (status?.state) {
+                    null -> {}
+                    "done" -> {
+                        setup.clear(job)
+                        _step.value = if (job == AblScript.BACKUP) {
+                            val a = status.values["slot_a"].orEmpty()
+                            val b = status.values["slot_b"].orEmpty()
+                            val documents = withContext(Dispatchers.IO) { runCatching { setup.copyToDocuments() }.getOrNull() }
+                            if (AblKnown.alreadyInstalled(a, b)) Step.BootMenuDone else Step.AblBackedUp(a, b, documents)
+                        } else {
+                            Step.BootMenuDone
+                        }
+                        return@launch
+                    }
+                    "failed" -> {
+                        setup.clear(job)
+                        _step.value = Step.Failed(status.message.ifBlank { "The boot loader step failed." }, back)
+                        return@launch
+                    }
+                    else -> if (_step.value is Step.AblRunScript) _step.value = Step.AblWorking(job)
+                }
+                kotlinx.coroutines.delay(1000)
+            }
+        }
     }
 
     /** Opens Retroid's handheld settings, where "Run Script as Root" is; Android settings elsewhere. */

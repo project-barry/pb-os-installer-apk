@@ -1,5 +1,7 @@
 package org.projectbarry.pbosinstaller.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
@@ -72,6 +74,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import org.projectbarry.pbosinstaller.BuildConfig
 import org.projectbarry.pbosinstaller.R
+import org.projectbarry.pbosinstaller.abl.AblScript
 import org.projectbarry.pbosinstaller.device.Devices
 import org.projectbarry.pbosinstaller.report.DeviceReport
 import org.projectbarry.pbosinstaller.report.ReportSender
@@ -260,24 +263,7 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel, modifier
 
                 is Step.Downloaded -> WriteStep(step, card, vm, primary)
 
-                is Step.RunScript -> {
-                    val context = LocalContext.current
-                    Title("One more step")
-                    Body("Writing to the card needs root access, which only your handheld's settings can give.")
-                    Body(
-                        if (vm.isRetroid) {
-                            "Open Handheld Settings → Advanced → Run Script as Root, and pick Download → ${step.launcher}. " +
-                                "Then come back here to follow the progress."
-                        } else {
-                            "Run Download → ${step.launcher} as root, then come back here to follow the progress."
-                        }
-                    )
-                    Button(
-                        onClick = { runCatching { context.startActivity(vm.handheldSettingsIntent()) } },
-                        modifier = Modifier.focusRing().focusRequester(primary),
-                    ) { Text(if (vm.isRetroid) "Open Handheld Settings" else "Open Settings") }
-                    Body("Waiting for the script to start…")
-                }
+                is Step.RunScript -> RunAsRoot("Writing to the card", step.launcher, vm, primary)
 
                 is Step.Writing -> {
                     if (step.phase == "writing") {
@@ -305,7 +291,55 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel, modifier
                 is Step.Written -> {
                     Title("PB-OS is on your card!")
                     Body("PB-OS ${step.tag} was written to the card and checked.")
-                    Body("Next comes the boot menu that starts PB-OS from the card. That's coming in the next version of this app.")
+                    Body("Next, set up the boot menu that starts PB-OS from the card.")
+                    Button(onClick = vm::openBootMenu, modifier = Modifier.focusRing().focusRequester(primary)) {
+                        Text("Set Up Boot Menu")
+                    }
+                }
+
+                Step.BootMenu -> {
+                    Title("Set up the boot menu")
+                    Body(
+                        "To start PB-OS from the card, your ${vm.handheld} needs the ROCKNIX boot menu. " +
+                            "Android stays: you choose it in the same menu."
+                    )
+                    Body("First, the app saves a copy of the original boot loader. Nothing is changed yet.")
+                    Button(onClick = vm::backUpBootLoader, modifier = Modifier.focusRing().focusRequester(primary)) {
+                        Text("Back Up Boot Loader")
+                    }
+                }
+
+                is Step.AblRunScript -> RunAsRoot(
+                    if (step.job == AblScript.BACKUP) "Backing up the boot loader" else "Installing the boot menu",
+                    step.launcher, vm, primary,
+                )
+
+                is Step.AblWorking -> Busy(
+                    if (step.job == AblScript.BACKUP) "Backing up the boot loader…" else "Installing the boot menu…"
+                )
+
+                is Step.AblBackedUp -> BackedUpStep(step, vm, primary)
+
+                Step.AblInstallReady -> {
+                    Title("Install the boot menu")
+                    Warning(
+                        "This replaces the boot loader of your ${vm.handheld} with the ROCKNIX boot menu. " +
+                            "If anything goes wrong, the app puts the original back."
+                    )
+                    Button(onClick = vm::installBootMenu, modifier = Modifier.focusRing().focusRequester(primary)) {
+                        Text("Install Boot Menu")
+                    }
+                }
+
+                Step.BootMenuDone -> {
+                    Title("The boot menu is installed!")
+                    Body("To start PB-OS:")
+                    Body(
+                        "1.  Turn your ${vm.handheld} off.\n" +
+                            "2.  Hold Volume Down while you turn it on.\n" +
+                            "3.  In the menu, set the device model, set the boot mode to Linux, then choose Start."
+                    )
+                    Body("Android is still there: choose it in the same menu.")
                 }
 
                 is Step.Failed -> {
@@ -316,6 +350,70 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel, modifier
             }
         }
     }
+}
+
+/** A root job saved in Downloads, for the user to run as root ([what] needs root). */
+@Composable
+private fun RunAsRoot(what: String, launcher: String, vm: InstallerViewModel, primary: FocusRequester) {
+    val context = LocalContext.current
+    Title("One more step")
+    Body("$what needs root access, which only your handheld's settings can give.")
+    Body(
+        if (vm.isRetroid) {
+            "Open Handheld Settings → Advanced → Run Script as Root, and pick Download → $launcher. " +
+                "Then come back here to follow the progress."
+        } else {
+            "Run Download → $launcher as root, then come back here to follow the progress."
+        }
+    )
+    Button(
+        onClick = { runCatching { context.startActivity(vm.handheldSettingsIntent()) } },
+        modifier = Modifier.focusRing().focusRequester(primary),
+    ) { Text(if (vm.isRetroid) "Open Handheld Settings" else "Open Settings") }
+    Body("Waiting for the script to start…")
+}
+
+/** After the backup: save a copy elsewhere, then confirm with 5 taps (like unlocking developer options). */
+@Composable
+private fun BackedUpStep(step: Step.AblBackedUp, vm: InstallerViewModel, primary: FocusRequester) {
+    var taps by rememberSaveable { mutableStateOf(0) }
+    var saved by rememberSaveable { mutableStateOf<Boolean?>(null) }
+    val saveCopy = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri != null) vm.saveBackupZip(uri) { saved = it }
+    }
+    Title("Boot loader backed up")
+    Body("Slot A: ${slotLabel(step.slotA)}\nSlot B: ${slotLabel(step.slotB)}")
+    step.documents?.let { Body("A copy is in $it on this handheld.") }
+    Warning(
+        "Save another copy somewhere else too (Google Drive, a USB drive, your computer). " +
+            "You need the original to go back to stock or to install Android updates."
+    )
+    OutlinedButton(onClick = { saveCopy.launch(vm.backupZipName()) }, modifier = Modifier.focusRing()) {
+        Text("Save a Copy…")
+    }
+    when (saved) {
+        true -> Body("✓ Saved.")
+        false -> Warning("Couldn't save the copy there. Try another place.")
+        null -> {}
+    }
+    Button(
+        onClick = { taps += 1; if (taps >= 5) vm.backupConfirmed() },
+        modifier = Modifier.focusRing().focusRequester(primary),
+    ) {
+        Text(
+            when (val left = 5 - taps) {
+                5 -> "I Saved a Copy (tap 5 times)"
+                1 -> "Tap 1 more time"
+                else -> "Tap $left more times"
+            }
+        )
+    }
+}
+
+private fun slotLabel(slot: String): String = when {
+    slot.startsWith("stock: ") -> "original boot loader (${slot.removePrefix("stock: ")})"
+    slot.startsWith("rocknix: ") -> slot.removePrefix("rocknix: ") + " boot menu"
+    else -> "unknown boot loader"
 }
 
 /** Downloaded: the last check before the card is erased and written. */

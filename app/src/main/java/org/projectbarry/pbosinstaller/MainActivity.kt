@@ -56,6 +56,8 @@ class MainActivity : ComponentActivity() {
                 socModel = soc,
             )
         }
+        // Debug builds only: jump to the boot menu step (no card needed), for testing.
+        if (BuildConfig.DEBUG && intent.getStringExtra("step") == "bootmenu") vm.openBootMenu()
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),

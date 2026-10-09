@@ -36,6 +36,13 @@ class DeviceTest {
         assertEquals("Nova", Devices.find(info("Moorechip", "Retroid Pocket Nova", "QCS8550"))?.shortName)
     }
 
+    @Test fun pocketFitIsTested() {
+        // No ro.soc.model on the Pocket FIT: the platform decides the chip.
+        val kpf = DeviceInfo("AYANEO", "AYANEO", "Pocket FIT", "PocketFIT", "AYANEO_Pocket_FIT", "QTI", "", "pineapple", "14")
+        assertEquals("KONKR Pocket FIT", Devices.find(kpf)?.name)
+        assertNull(Devices.find(kpf.copy(socModel = "SM8750", boardPlatform = "sun")))
+    }
+
     @Test fun shortNames() {
         assertEquals(listOf("RP6", "Nova", "Thor", "KPF"), Devices.tested.map { it.shortName })
     }

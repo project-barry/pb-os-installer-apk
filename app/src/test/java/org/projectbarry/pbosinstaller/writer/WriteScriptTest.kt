@@ -39,17 +39,21 @@ class WriteScriptTest {
             "sm unmount",
             "expr \"${'$'}(cat /sys/block/${'$'}DEV/size)\" '*' 512", // 64-bit card size
             "echo 67108864 > ${'$'}VM/dirty_bytes", // no system stall while writing
-            "trap 'restore_vm; rm -f /data/local/tmp/pbos-write.sh' EXIT", // settings back, copy gone
+            "trap 'restore_vm; rm -f \"${'$'}RUN_COPY\"' EXIT", // settings back, copy gone
         ).forEach { assertTrue(it, it in body) }
         assertTrue("rereadpt" !in body)
         // No shell arithmetic or -ge/-gt on byte counts: Android's shell is 32-bit.
         assertTrue(Regex("""\* 512|-ge "\$\{?(SIZE|IMAGE_BYTES)""").find(body) == null)
     }
 
-    @Test fun launcherIsOneLine() {
-        val l = WriteScript.launcher("/data/media/0/x/pbos-write.sh")
-        assertEquals(1, l.trimEnd().lines().size)
-        assertEquals("cp '/data/media/0/x/pbos-write.sh' /data/local/tmp/pbos-write.sh && nohup sh /data/local/tmp/pbos-write.sh >/dev/null 2>&1 &\n", l)
+    @Test fun startsWithPrelude() {
+        val body = WriteScript.body(job)
+        assertTrue(body.startsWith("#!/system/bin/sh"))
+        // Moves itself off shared storage and into the background.
+        assertTrue("RUN_COPY='/data/local/tmp/pbos-write.sh'" in body)
+        assertTrue("nohup sh" in body)
+        // The dry run stays in the foreground (adb waits for it).
+        assertTrue("RUN_COPY" !in WriteScript.body(job.copy(dryRunTarget = "/dev/null")).substringBefore("SEVENZIP="))
     }
 
     @Test fun quotingSurvivesQuotes() {
@@ -58,6 +62,6 @@ class WriteScriptTest {
 
     @Test fun rootPath() {
         assertEquals("/data/media/0/Android/data/p/files/write/status",
-            CardWriter.rootPath(File("/storage/emulated/0/Android/data/p/files/write/status")))
+            org.projectbarry.pbosinstaller.root.RootJobs.rootPath(File("/storage/emulated/0/Android/data/p/files/write/status")))
     }
 }

@@ -85,7 +85,7 @@ entry (case ignored) **and** its chip matches the entry's chip.
 | Retroid Pocket 6 | SM8550 | `Moorechip` / `Retroid Pocket 6` | `sm8550` |
 | Retroid Pocket Nova | SM8550 | `Moorechip` / `Retroid Pocket Nova` | `sm8550` |
 | AYN Thor | SM8550 | placeholder | `sm8550` |
-| KONKR Pocket FIT | SM8650 | placeholder | `pocketfit` |
+| KONKR Pocket FIT | SM8650 | `AYANEO` / `Pocket FIT` | `pocketfit` |
 
 RP6 and Nova strings come from `getprop` on their stock Android 13. A
 placeholder never matches, so those handhelds are treated as untested until a

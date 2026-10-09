@@ -28,9 +28,11 @@ object Devices {
         // Confirmed from getprop on stock Android 13: ro.soc.model QCS8550, ro.board.platform kalama.
         TestedDevice("Retroid Pocket 6", "RP6", Soc.SM8550, "Moorechip", "Retroid Pocket 6", listOf("sm8550")),
         TestedDevice("Retroid Pocket Nova", "Nova", Soc.SM8550, "Moorechip", "Retroid Pocket Nova", listOf("sm8550")),
-        // Placeholders until someone copies the device info from the real device.
+        // Placeholder until someone sends a device report from a real one.
         TestedDevice("AYN Thor", "Thor", Soc.SM8550, PLACEHOLDER, PLACEHOLDER, listOf("sm8550")),
-        TestedDevice("KONKR Pocket FIT", "KPF", Soc.SM8650, PLACEHOLDER, PLACEHOLDER, listOf("pocketfit")),
+        // Android calls it AYANEO "Pocket FIT" (getprop on stock Android 14); it reports no
+        // ro.soc.model, only the platform (pineapple). The 8 Elite edition (SM8750) is refused.
+        TestedDevice("KONKR Pocket FIT", "KPF", Soc.SM8650, "AYANEO", "Pocket FIT", listOf("pocketfit")),
         // Not tested yet, so not listed: AYANEO Pocket S2 would be "S2" (SM8650, image "pocketfit").
     )
 
