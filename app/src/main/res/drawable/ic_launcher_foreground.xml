@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Down arrow onto a microSD card. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M42,38 L60,38 L68,46 L68,74 Q68,76 66,76 L42,76 Q40,76 40,74 L40,40 Q40,38 42,38 Z" />
+    <path android:fillColor="#8C00FF"
+        android:pathData="M51,46 L57,46 L57,58 L62,58 L54,67 L46,58 L51,58 Z" />
+</vector>
