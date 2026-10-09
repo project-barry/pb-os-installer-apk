@@ -319,6 +319,7 @@ private fun OfferStep(step: Step.Offer, card: SdCard?, vm: InstallerViewModel, p
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Checkbox(checked = understood, onCheckedChange = null)
+        Spacer(Modifier.size(12.dp))
         Text("I understand the card will be erased")
     }
     Button(onClick = { vm.download(image) }, enabled = understood, modifier = Modifier.focusRing()) {
