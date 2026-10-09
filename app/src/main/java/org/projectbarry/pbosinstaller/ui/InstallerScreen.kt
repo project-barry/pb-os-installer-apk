@@ -91,18 +91,19 @@ fun InstallerScreen(vm: InstallerViewModel) {
                 Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll).padding(gap),
                 verticalArrangement = Arrangement.spacedBy(gap),
             ) {
-                if (wide) {
-                    // Title on top, then the two cards side by side: tops aligned and
-                    // the shorter one stretched to the taller one's height.
-                    Header()
+                // The device card (with Send Device Report) belongs to the first
+                // screens only; after Continue the step card has the page to itself.
+                val showDevice = step is Step.Card || step is Step.Untested || step is Step.WrongChip
+                Header()
+                if (wide && showDevice) {
+                    // Side by side: tops aligned, the shorter card stretched to the taller one.
                     Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(gap)) {
                         StepCard(step, card, vm, Modifier.weight(1.4f).fillMaxHeight())
                         DeviceCard(vm, Modifier.weight(1f).fillMaxHeight())
                     }
                 } else {
-                    Header()
                     StepCard(step, card, vm)
-                    DeviceCard(vm)
+                    if (showDevice) DeviceCard(vm)
                 }
             }
             Footer(vm, gap)

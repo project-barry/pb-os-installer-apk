@@ -32,7 +32,9 @@ Card ──[Continue]──▶ Untested                    (stop, unless -Pallow
 Failed ──[Try again]──▶ back to the step the user was on
 ```
 
-Continue is only enabled with a card of at least 32 GB in. Once the download
+The device card (model, chip, **Send Device Report**) shows only on the
+Card, Untested and WrongChip screens; from Ready on, the step card has the
+page to itself. Continue is only enabled with a card of at least 32 GB in. Once the download
 has started, taking the card out no longer interrupts it; the card only
 matters again for writing, which will also wait for the user's go-ahead.
 
