@@ -29,18 +29,25 @@ sealed interface ReportState {
     data class Done(val result: ReportSender.Result) : ReportState
 }
 
-/** Where the user is in the install, in the order the app checks things. */
+/**
+ * Where the user is in the install. The app only moves forward when the user
+ * taps a button; it checks the chip and model by itself (local, nothing
+ * changes), and goes back to [Card] if the card is taken out.
+ */
 sealed interface Step {
-    data object Checking : Step
     data object WrongChip : Step
-    data object NeedCard : Step
+    /** Waiting for the user to insert a card and tap Continue. */
+    data object Card : Step
     data object Untested : Step
+    /** Model checked; waiting for the user to tap "Look up newest release". */
+    data class Ready(val images: List<String>) : Step
     data object LoadingRelease : Step
     data class Offer(val image: ImageRelease, val needed: Long, val free: Long) : Step
     data class Downloading(val progress: ImageDownloader.Progress) : Step
     data class Verifying(val done: Long, val total: Long) : Step
     data class Downloaded(val image: ImageRelease) : Step
-    data class Failed(val message: String) : Step
+    /** "Try again" goes back to [back], the step the user was on. */
+    data class Failed(val message: String, val back: Step) : Step
 }
 
 class InstallerViewModel(app: Application) : AndroidViewModel(app) {
@@ -78,63 +85,60 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private val _step = MutableStateFlow<Step>(Step.Checking)
+    private val _step = MutableStateFlow<Step>(if (info.soc == null) Step.WrongChip else Step.Card)
     val step: StateFlow<Step> = _step
     private var job: Job? = null
 
     init {
-        if (info.soc == null) {
-            _step.value = Step.WrongChip
-        } else {
+        if (info.soc != null) {
             watcher.start()
             viewModelScope.launch { watcher.card.collect { onCard(it) } }
         }
     }
 
+    /** Taking the card out goes back to the card step; putting one in never moves on by itself. */
     private fun onCard(card: SdCard?) {
         val step = _step.value
-        // Once the download has started a missing card doesn't matter until flashing.
-        val beforeDownload = step is Step.Checking || step is Step.NeedCard || step is Step.Untested ||
-            step is Step.LoadingRelease || step is Step.Offer
-        if (!beforeDownload) return
-        if (card == null) {
+        if (card == null && (step is Step.Ready || step is Step.LoadingRelease || step is Step.Offer)) {
             job?.cancel()
-            _step.value = Step.NeedCard
-        } else if (step is Step.Checking || step is Step.NeedCard) {
-            checkDevice()
+            _step.value = Step.Card
         }
     }
 
-    private fun checkDevice() {
-        val images = when {
-            tested != null -> tested.images
-            untestedAllowed -> Devices.imagesBySoc.getValue(info.soc!!)
-            else -> {
-                _step.value = Step.Untested
-                return
-            }
+    /** "Continue" on the card step: checks the model (local) and shows the result. */
+    fun continueWithCard() {
+        val card = watcher.card.value
+        if (_step.value != Step.Card || card == null || !card.bigEnough) return
+        _step.value = when {
+            tested != null -> Step.Ready(tested.images)
+            untestedAllowed -> Step.Ready(Devices.imagesBySoc.getValue(info.soc!!))
+            else -> Step.Untested
         }
-        loadRelease(images)
     }
 
-    private fun loadRelease(images: List<String>) {
+    /** "Look up newest release": the first time the app goes online. */
+    fun lookUpRelease() {
+        val ready = _step.value as? Step.Ready ?: return
         _step.value = Step.LoadingRelease
         job?.cancel()
         job = viewModelScope.launch {
             _step.value = try {
                 withContext(Dispatchers.IO) {
                     val (_, release) = Releases.fetchLatest(BuildConfig.RELEASES_REPO)
-                    val image = Releases.pickImage(release, images)
-                        ?: return@withContext Step.Failed("The newest PB-OS release has no image for this device yet.")
+                    val image = Releases.pickImage(release, ready.images)
+                        ?: return@withContext Step.Failed("The newest PB-OS release has no image for this device yet.", ready)
                     Step.Offer(image, downloader.bytesNeeded(image), downloader.freeBytes())
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
-                Step.Failed("Couldn't reach GitHub to find the newest PB-OS release (${e.message}). Check Wi-Fi and try again.")
+                Step.Failed("Couldn't reach GitHub to find the newest PB-OS release (${e.message}). Check Wi-Fi and try again.", ready)
             }
         }
     }
 
     fun download(image: ImageRelease) {
+        val offer = _step.value as? Step.Offer ?: return
         job?.cancel()
         job = viewModelScope.launch {
             _step.value = try {
@@ -151,22 +155,21 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
                     Step.Downloaded(image)
                 }
             } catch (e: ImageDownloader.DownloadError) {
-                Step.Failed(e.message ?: "Download failed.")
+                Step.Failed(e.message ?: "Download failed.", offer)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Step.Failed("Download failed (${e.message}). Try again.")
+                Step.Failed("Download failed (${e.message}). Try again.", offer)
             }
         }
     }
 
-    /** Start over from the device checks. */
+    /** "Try again": back to the step the user was on (the card step if the card is gone). */
     fun retry() {
+        val failed = _step.value as? Step.Failed ?: return
         job?.cancel()
-        if (info.soc == null) return
-        _step.value = Step.Checking
-        watcher.refresh()
-        onCard(watcher.card.value)
+        val needsCard = failed.back is Step.Ready || failed.back is Step.Offer
+        _step.value = if (needsCard && watcher.card.value == null) Step.Card else failed.back
     }
 
     override fun onCleared() {

@@ -10,25 +10,31 @@ Kotlin, Jetpack Compose, minSdk 30, targetSdk 35. Package
 ## Flow
 
 The screen is a single state machine in
-[InstallerViewModel.kt](../app/src/main/java/org/projectbarry/pbosinstaller/ui/InstallerViewModel.kt):
+[InstallerViewModel.kt](../app/src/main/java/org/projectbarry/pbosinstaller/ui/InstallerViewModel.kt).
+**The app only moves forward when the user taps a button.** It does the local
+checks (chip, model, card size) by itself, because they change nothing, and it
+goes back to the card step if the card is taken out before the download, but
+inserting a card never moves it on.
 
 ```
-Checking ─▶ WrongChip                          (stop)
-   │
-   ▼
-NeedCard ◀──── card removed ──── (any step before the download)
-   │ card seen
-   ▼
-Untested                                       (stop, unless -PallowUntested=true)
-   │ tested model
-   ▼
-LoadingRelease ─▶ Offer ─▶ Downloading ─▶ Verifying ─▶ Downloaded
-                    │            │             │
-                    └────────────┴─────────────┴──▶ Failed (Try again = back to Checking)
+WrongChip                                       (stop)
+
+Card ──[Continue]──▶ Untested                    (stop, unless -PallowUntested=true)
+  ▲          │
+  │          ▼
+  │        Ready ──[Look up newest release]──▶ LoadingRelease ─▶ Offer
+  │                                                                │
+  │                                              [Download PB-OS] ▼
+  │                                     Downloading ─▶ Verifying ─▶ Downloaded
+  │
+  └── card taken out (Ready, LoadingRelease, Offer)
+
+Failed ──[Try again]──▶ back to the step the user was on
 ```
 
-Once the download has started, taking the card out no longer interrupts it;
-the card only matters again for writing.
+Continue is only enabled with a card of at least 32 GB in. Once the download
+has started, taking the card out no longer interrupts it; the card only
+matters again for writing, which will also wait for the user's go-ahead.
 
 ## 1. Chip check
 
@@ -50,7 +56,8 @@ the card only matters again for writing.
 
 - Watches `StorageManager` volumes (removable, not primary) through a
   `StorageVolumeCallback` and the `ACTION_MEDIA_*` broadcasts, so inserting a
-  card moves the app on without a tap.
+  card updates the card step at once (Continue enables); it never moves on by
+  itself.
 - A card counts as present whatever is on it, including Linux file systems
   that Android calls "unmountable".
 - **Size.** A card that already holds PB-OS appears as one volume per

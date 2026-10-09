@@ -41,13 +41,15 @@ a KONKR Pocket FIT before it recognises them. If you have one, see
 
 ## How it works
 
+The app asks you before each step and never moves on by itself.
+
 1. **Open the app.** It checks that your handheld has a chip PB-OS supports
    (Snapdragon 8 Gen 2 or 8 Gen 3). If not, it stops here.
-2. **Put in a microSD card.** If there's no card, the app waits and carries on
-   by itself as soon as you put one in.
-3. **The app checks your handheld.** It only installs on handhelds we have
-   tested PB-OS on, so nobody ends up with a system that doesn't work on
-   their hardware.
+2. **Put in a microSD card and tap Continue.** The app checks that the card is
+   big enough and that your handheld is one we have tested PB-OS on, so nobody
+   ends up with a system that doesn't work on their hardware.
+3. **Tap Look up newest release.** The app finds the newest PB-OS on GitHub.
+   Nothing is downloaded yet.
 4. **Download.** Tick "I understand the card will be erased" and tap
    **Download PB-OS**. You can leave the app while it downloads. When it's
    done, the app checks that the download is complete and really comes from

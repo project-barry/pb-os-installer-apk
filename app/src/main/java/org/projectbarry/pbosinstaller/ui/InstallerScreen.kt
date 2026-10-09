@@ -32,6 +32,12 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.platform.LocalInputModeManager
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -112,12 +118,20 @@ private fun Header() =
 
 @Composable
 private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel) {
+    // With a controller, each new step's main control is selected at once, so the
+    // selection doesn't fall into the device panel when the old button disappears.
+    val primary = remember { FocusRequester() }
+    val inputMode = LocalInputModeManager.current.inputMode
+    LaunchedEffect(step::class) {
+        if (inputMode == InputMode.Keyboard) {
+            delay(50)
+            runCatching { primary.requestFocus() }
+        }
+    }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             when (step) {
-                Step.Checking, Step.LoadingRelease -> Busy(
-                    if (step == Step.Checking) "Checking this device…" else "Looking for the newest PB-OS release…"
-                )
+                Step.LoadingRelease -> Busy("Looking for the newest PB-OS release…")
 
                 Step.WrongChip -> {
                     Title("This device can't run PB-OS")
@@ -127,16 +141,20 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel) {
                     )
                 }
 
-                Step.NeedCard -> {
-                    Title("Insert a microSD card")
+                Step.Card -> CardStep(card, vm, primary)
+
+                is Step.Ready -> {
+                    Title(if (vm.tested != null) "Your handheld is supported" else "Untested handheld")
+                    if (vm.tested == null) {
+                        Warning("UNTESTED DEVICE: this build allows installing on handhelds PB-OS was never tested on.")
+                    }
                     Body(
-                        "PB-OS runs from a microSD card. Put one in the card slot (32 GB or bigger). " +
-                            "The app carries on by itself once it sees the card."
+                        "${vm.tested?.name ?: "${vm.info.manufacturer} ${vm.info.model}"} · ${vm.info.soc?.label}" +
+                            (if (vm.tested != null) "\nPB-OS has been tested on this handheld." else "")
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.size(12.dp))
-                        Text("Waiting for a card…")
+                    Body("Next, the app looks up the newest PB-OS release on GitHub. Nothing is downloaded yet.")
+                    Button(onClick = vm::lookUpRelease, modifier = Modifier.focusRing().focusRequester(primary)) {
+                        Text("Look up newest release")
                     }
                 }
 
@@ -154,7 +172,7 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel) {
                     )
                 }
 
-                is Step.Offer -> OfferStep(step, card, vm)
+                is Step.Offer -> OfferStep(step, card, vm, primary)
 
                 is Step.Downloading -> {
                     Title("Downloading PB-OS")
@@ -177,15 +195,35 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel) {
                 is Step.Failed -> {
                     Title("Something went wrong")
                     Body(step.message)
-                    Button(onClick = vm::retry, modifier = Modifier.focusRing()) { Text("Try again") }
+                    Button(onClick = vm::retry, modifier = Modifier.focusRing().focusRequester(primary)) { Text("Try again") }
                 }
             }
         }
     }
 }
 
+/** Insert a card, then Continue: the app never moves on by itself when a card goes in. */
 @Composable
-private fun OfferStep(step: Step.Offer, card: SdCard?, vm: InstallerViewModel) {
+private fun CardStep(card: SdCard?, vm: InstallerViewModel, primary: FocusRequester) {
+    Title("Insert a microSD card")
+    Body("PB-OS runs from a microSD card of 32 GB or bigger. Put one in the card slot, then tap Continue.")
+    when {
+        card == null -> Body("No card found yet.")
+        !card.bigEnough -> Warning(
+            "This card is too small (${card.sizeBytes?.let(::formatBytes)}). " +
+                "PB-OS needs a microSD card of 32 GB or bigger."
+        )
+        else -> Body("✓ Card found" + (card.sizeBytes?.let { ": ${formatBytes(it)}" } ?: "") + ".")
+    }
+    Button(
+        onClick = vm::continueWithCard,
+        enabled = card != null && card.bigEnough,
+        modifier = Modifier.focusRing().focusRequester(primary),
+    ) { Text("Continue") }
+}
+
+@Composable
+private fun OfferStep(step: Step.Offer, card: SdCard?, vm: InstallerViewModel, primary: FocusRequester) {
     var understood by rememberSaveable { mutableStateOf(false) }
     val image = step.image
     Title(image.title)
@@ -207,13 +245,10 @@ private fun OfferStep(step: Step.Offer, card: SdCard?, vm: InstallerViewModel) {
                 .takeIf { it.isNotEmpty() }?.joinToString(", ", " (", ")") ?: "") +
             ". Copy anything you want to keep off the card first."
     )
-    if (card != null && !card.bigEnough) {
-        Warning("This card is too small. PB-OS needs a microSD card of 32 GB or bigger.")
-        return
-    }
     Row(
         Modifier
             .focusRing(RoundedCornerShape(8.dp))
+            .focusRequester(primary)
             .toggleable(value = understood, role = Role.Checkbox, onValueChange = { understood = it })
             .padding(end = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
