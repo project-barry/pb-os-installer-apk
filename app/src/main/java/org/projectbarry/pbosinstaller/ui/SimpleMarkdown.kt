@@ -14,6 +14,8 @@ object SimpleMarkdown {
         data class Paragraph(val spans: List<Span>) : Block
         /** A list item; [marker] is "•" or the item's number, e.g. "3.". */
         data class Bullet(val spans: List<Span>, val marker: String = "•") : Block
+        /** Text shown exactly as is, in a fixed-width font (added by the app, not parsed). */
+        data class Code(val text: String) : Block
     }
 
     fun parse(markdown: String): List<Block> {
@@ -90,7 +92,7 @@ object SimpleMarkdown {
         when (it) {
             is Block.Paragraph -> it.spans
             is Block.Bullet -> it.spans
-            is Block.Heading -> emptyList()
+            is Block.Heading, is Block.Code -> emptyList()
         }
     }.mapNotNull { it.url }
 

@@ -1,4 +1,4 @@
-# What this app does
+# How does it work?
 
 PB-OS Installer puts PB-OS on a microSD card, right on your handheld. It asks
 you before each step.

@@ -54,6 +54,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -63,16 +64,27 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.projectbarry.pbosinstaller.ui.SimpleMarkdown.Block
 
-/** "What's in the report?": docs/DEVICE-REPORT.md as bundled at build time. */
+/**
+ * "What's in the Report?": docs/DEVICE-REPORT.md as bundled at build time, then
+ * [report], the exact text "Send Device Report" would send from this handheld.
+ */
 @Composable
-fun ReportInfoDialog(onClose: () -> Unit) =
-    DocDialog("DEVICE-REPORT.md", "What's in a device report?", onClose = onClose)
+fun ReportInfoDialog(report: String, onClose: () -> Unit) = DocDialog(
+    "DEVICE-REPORT.md",
+    "What's in a device report?",
+    extra = listOf(
+        Block.Heading(2, "Your handheld's report"),
+        Block.Paragraph(listOf(SimpleMarkdown.Span("This is exactly what Send Device Report would send from this handheld right now:"))),
+        Block.Code(report),
+    ),
+    onClose = onClose,
+)
 
-/** "What this app does": docs/ABOUT.md, with a QR code for the app's GitHub page at the bottom. */
+/** "How Does it Work?": docs/ABOUT.md, with a QR code for the app's GitHub page at the bottom. */
 @Composable
 fun AboutDialog(onClose: () -> Unit) = DocDialog(
     "ABOUT.md",
-    "What this app does",
+    "How does it work?",
     bottomQr = Qr(REPO_URL, "Scan with your phone to open the app on GitHub", "QR code for PB-OS Installer on GitHub"),
     onClose = onClose,
 )
@@ -108,6 +120,7 @@ private fun DocDialog(
     asset: String,
     fallbackTitle: String,
     fullTexts: List<Pair<String, String>> = emptyList(),
+    extra: List<Block> = emptyList(),
     bottomQr: Qr? = null,
     onClose: () -> Unit,
 ) {
@@ -125,7 +138,7 @@ private fun DocDialog(
         }
     }
     val title = (blocks.firstOrNull() as? Block.Heading)?.takeIf { it.level == 1 }?.text ?: fallbackTitle
-    val body = (if ((blocks.firstOrNull() as? Block.Heading)?.level == 1) blocks.drop(1) else blocks) + appendix
+    val body = (if ((blocks.firstOrNull() as? Block.Heading)?.level == 1) blocks.drop(1) else blocks) + extra + appendix
     PagePopup(title, body, bottomQr, onClose)
 }
 
@@ -266,6 +279,18 @@ private fun MarkdownBlock(block: Block, openLink: (String) -> Unit) {
                 .distinct().forEach {
                     QrBlock(Qr(it, "Scan with your phone to join our Discord", "QR code for the Project Barry Discord"))
                 }
+        }
+        is Block.Code -> Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerLowest,
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                block.text,
+                fontFamily = FontFamily.Monospace,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(12.dp),
+            )
         }
         is Block.Bullet -> Row {
             Text("${block.marker}  ", style = MaterialTheme.typography.bodyLarge)

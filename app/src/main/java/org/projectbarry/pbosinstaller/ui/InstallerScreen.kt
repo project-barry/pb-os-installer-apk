@@ -83,7 +83,7 @@ fun InstallerScreen(vm: InstallerViewModel) {
                         DeviceCard(vm)
                     }
                 }
-                Footer()
+                Footer(vm)
             }
         } else {
             Column(
@@ -93,7 +93,7 @@ fun InstallerScreen(vm: InstallerViewModel) {
                 Header()
                 StepCard(step, card, vm)
                 DeviceCard(vm)
-                Footer()
+                Footer(vm)
             }
         }
     }
@@ -102,20 +102,23 @@ fun InstallerScreen(vm: InstallerViewModel) {
 /** App version and the pop-up pages, as links. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Footer() {
+private fun Footer(vm: InstallerViewModel) {
     var page by remember { mutableStateOf<String?>(null) }
     when (page) {
         "about" -> AboutDialog(onClose = { page = null })
-        "report" -> ReportInfoDialog(onClose = { page = null })
+        "report" -> ReportInfoDialog(
+            report = remember { DeviceReport.text(vm.reportFields()) },
+            onClose = { page = null },
+        )
         "licenses" -> LicensesDialog(onClose = { page = null })
         "github" -> GitHubDialog(onClose = { page = null })
         "discord" -> DiscordDialog(onClose = { page = null })
     }
-    // First line: the two pages about the install; second: app version and the rest.
-    Column {
-        FlowRow {
-            TextButton(onClick = { page = "about" }, modifier = Modifier.focusRing()) { Text("What this app does") }
-            TextButton(onClick = { page = "report" }, modifier = Modifier.focusRing()) { Text("What's in the report?") }
+    // First line: the two pages about the install, as buttons; second: version and links.
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { page = "about" }, modifier = Modifier.focusRing()) { Text("How Does it Work?") }
+            OutlinedButton(onClick = { page = "report" }, modifier = Modifier.focusRing()) { Text("What's in the Report?") }
         }
         FlowRow {
             Text(

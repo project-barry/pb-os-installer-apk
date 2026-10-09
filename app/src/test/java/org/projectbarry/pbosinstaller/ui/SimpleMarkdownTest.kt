@@ -73,7 +73,7 @@ class SimpleMarkdownTest {
 
     @Test fun aboutPage() {
         val blocks = SimpleMarkdown.parse(File("../docs/ABOUT.md").readText())
-        assertEquals(Block.Heading(1, "What this app does"), blocks.first())
+        assertEquals(Block.Heading(1, "How does it work?"), blocks.first())
         assertEquals((1..6).map { "$it." }, blocks.filterIsInstance<Block.Bullet>().map { it.marker })
         assertEquals(listOf("https://github.com/project-barry/pb-os-installer-apk"), SimpleMarkdown.links(blocks))
     }
@@ -87,6 +87,7 @@ class SimpleMarkdownTest {
                 is Block.Heading -> it.text
                 is Block.Paragraph -> it.spans.joinToString("") { s -> s.text }
                 is Block.Bullet -> it.spans.joinToString("") { s -> s.text }
+                is Block.Code -> it.text
             }
         }
         assertEquals(Block.Heading(1, "What's in a device report?"), blocks.first())

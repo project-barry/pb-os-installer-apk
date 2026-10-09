@@ -58,7 +58,7 @@ The app asks you before each step and never moves on by itself.
 You can use the touch screen or the controller: the d-pad moves between
 buttons and **A** presses them.
 
-At the bottom of the app, **What this app does** shows these steps in short
+At the bottom of the app, **How Does it Work?** shows these steps in short
 ([docs/ABOUT.md](docs/ABOUT.md)), with a QR code for this page.
 
 ## My handheld isn't recognised
@@ -67,9 +67,10 @@ Tap **Send Device Report**. The app shows you exactly what it will send, and
 only sends it when you tap **Send**. The report goes to the Project Barry
 Discord server so we can add your handheld.
 
-**What's in the report?** (at the bottom of the app) shows a short page
-explaining what the report contains and how we use it. You can also read it
-here: [docs/DEVICE-REPORT.md](docs/DEVICE-REPORT.md).
+**What's in the Report?** (at the bottom of the app) shows a short page
+explaining what the report contains and how we use it, followed by your
+handheld's exact report. You can also read the page here:
+[docs/DEVICE-REPORT.md](docs/DEVICE-REPORT.md).
 
 If you'd rather send it yourself, tap **Copy device info** and paste it to us
 on Discord.

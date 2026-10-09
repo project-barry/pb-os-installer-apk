@@ -141,7 +141,7 @@ tampered copy, another key and another namespace.
 **Send Device Report** posts a JSON object to the relay, a Cloudflare Worker,
 which posts it to a Discord channel. The Discord webhook is a secret of the
 Worker and is never in the app or this repo. The **What's in the
-report?** link at the bottom of the app shows [DEVICE-REPORT.md](DEVICE-REPORT.md), the plain-English
+Report?** button at the bottom of the app shows [DEVICE-REPORT.md](DEVICE-REPORT.md), the plain-English
 version of this section for users, in a pop-up. The build copies that file
 into the APK (`CopyAppDocs` in `app/build.gradle.kts`), so each build shows
 the page as it was when it was built, with no browser or internet needed.
@@ -222,9 +222,10 @@ info** still works. Setting up the relay itself: [relay/README.md](../relay/READ
 
 The footer links open pop-ups built from pages in this repo, copied into the
 APK by the build (`CopyAppDocs`), so each build shows them as they were when
-it was built: **What this app does** ([ABOUT.md](ABOUT.md), with a QR code for
-the GitHub repo), **What's in the report?** ([DEVICE-REPORT.md](DEVICE-REPORT.md),
-with a QR code for the Discord invite) and **Licenses** ([LICENSES.md](LICENSES.md)
+it was built: **How Does it Work?** ([ABOUT.md](ABOUT.md), with a QR code for
+the GitHub repo), **What's in the Report?** ([DEVICE-REPORT.md](DEVICE-REPORT.md),
+with a QR code for the Discord invite, followed by this handheld's exact report
+as **Send Device Report** would send it) and **Licenses** ([LICENSES.md](LICENSES.md)
 plus `LICENSES/`). **GitHub** and **Discord** are small pop-ups built in code
 (`LinkDialog` in `DocDialog.kt`): one line of text, the tappable link and a QR
 code for it. The pop-ups read a small Markdown subset (`SimpleMarkdown`):
