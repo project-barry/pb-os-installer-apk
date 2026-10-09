@@ -13,70 +13,85 @@
 > **Watch Project Barry on YouTube:** https://www.youtube.com/@Project-Barry
 
 An Android app that puts [PB-OS](https://github.com/project-barry/pb-os) on a
-microSD card, right on the handheld, with no PC.
+microSD card, right on your handheld. No computer needed.
 
 > [!WARNING]
-> Work in progress. The app downloads and checks the image today. Writing it
-> to the card and the ROCKNIX ABL steps come next.
+> This app is still being built. Right now it checks your handheld and
+> downloads PB-OS. Writing PB-OS onto the card is the next step.
 
-## What it does
+## What you need
 
-1. **Checks the chip.** PB-OS has images for Snapdragon 8 Gen 2 (SM8550, also
-   reported as QCS8550) and Snapdragon 8 Gen 3 (SM8650). Anything else stops here.
-2. **Waits for a microSD card.** Carries on by itself once a card is in.
-   The card must be 32 GB or bigger.
-3. **Checks the handheld.** Only models PB-OS was tested on can install.
-4. **Downloads the newest PB-OS release** for that handheld from GitHub
-   (the release marked *Latest*), after a clear warning that the card will be
-   erased. The checksum list must carry the pb-os release signature, and every
-   part must match it.
+- A handheld PB-OS has been tested on (see the list below).
+- A microSD card of 32 GB or bigger. **Everything on the card will be
+  erased.** Copy off anything you want to keep first.
+- Wi-Fi, and about 5 GB of free space on the handheld for the download.
 
-## Tested handhelds
+## Handhelds
 
-The app matches Android's `Build.MANUFACTURER` and `Build.MODEL`
-([Devices.kt](app/src/main/java/org/projectbarry/pbosinstaller/device/Devices.kt)).
+| Handheld | Does the app recognise it yet? |
+|---|---|
+| Retroid Pocket 6 | Yes |
+| Retroid Pocket Nova | Yes |
+| AYN Thor | Not yet |
+| KONKR Pocket FIT | Not yet |
 
-| Handheld | Chip | Android strings |
-|---|---|---|
-| Retroid Pocket 6 | SM8550 | `Moorechip` / `Retroid Pocket 6` |
-| Retroid Pocket Nova | SM8550 | `Moorechip` / `Retroid Pocket Nova` |
-| AYN Thor | SM8550 | placeholder |
-| KONKR Pocket FIT | SM8650 | placeholder |
+PB-OS runs on all four, but the app still needs a report from an AYN Thor and
+a KONKR Pocket FIT before it recognises them. If you have one, see
+[My handheld isn't recognised](#my-handheld-isnt-recognised).
 
-Until a placeholder is filled in, the app treats that handheld as untested. To
-get the real strings, open the app on the device and tap **Copy device info**.
+## How it works
 
-## Untested handhelds
+1. **Open the app.** It checks that your handheld has a chip PB-OS supports
+   (Snapdragon 8 Gen 2 or 8 Gen 3). If not, it stops here.
+2. **Put in a microSD card.** If there's no card, the app waits and carries on
+   by itself as soon as you put one in.
+3. **The app checks your handheld.** It only installs on handhelds we have
+   tested PB-OS on, so nobody ends up with a system that doesn't work on
+   their hardware.
+4. **Download.** Tick "I understand the card will be erased" and tap
+   **Download PB-OS**. You can leave the app while it downloads. When it's
+   done, the app checks that the download is complete and really comes from
+   the PB-OS team.
 
-Every build we hand out refuses handhelds that aren't in the list. For
-development, one build flag lets any SM8550 or SM8650 handheld through (the
-app then shows an "untested device" warning):
+You can use the touch screen or the controller: the d-pad moves between
+buttons and **A** presses them.
 
-```sh
-./gradlew assembleDebug -PallowUntested=true
-```
+## My handheld isn't recognised
 
-## Building
+Tap **Report this device**. The app shows you exactly what it will send, and
+only sends it when you tap **Send**. The report goes to the PB-OS team on
+Discord so we can add your handheld.
 
-Needs JDK 17 and the Android SDK (platform 35).
+You can send one report a day. If you'd rather send it yourself, tap **Copy
+device info** and paste it to us on Discord.
 
-```sh
-./gradlew testDebugUnitTest assembleDebug
-```
+### What's in a report?
 
-The APK lands in `app/build/outputs/apk/debug/`.
+Only details that are the same on every handheld of your model: the maker,
+the model name, the chip, the Android version, which firmware it runs, the
+name of the memory-card slot, and whether the handheld has a "root" tool. It
+never includes serial numbers, accounts, contacts, location, Wi-Fi details or
+anything you've stored.
 
-### Trying every screen on an emulator
+**What's "fingerprint"?** Despite the name, it has nothing to do with your
+finger. It's Android's name for the firmware version, for example
+`qti/kalama/kalama:13/TKQ1.231222.001/eng.RPN.20260722.081626:user/release-keys`.
+Every handheld running the same firmware shows exactly the same text. It tells
+us which firmware update you're on.
 
-Debug builds can pretend to be another device:
+One part of it, after `eng.`, is the user name of the computer the firmware was
+built on. On firmware from Retroid, AYN or KONKR that's the maker's build
+computer (`RPN` above). Only if you built your own firmware at home would it be
+your own computer's user name.
 
-```sh
-adb shell am start -n org.projectbarry.pbosinstaller/.MainActivity \
-  --es fakeManufacturer Moorechip --es fakeModel "'Retroid Pocket 6'" --es fakeSoc QCS8550
-adb shell sm set-virtual-disk true   # then: adb shell sm partition disk:<id> public
-```
+## Getting the app
 
-Release builds ignore these extras.
+There's no public download yet. Testers get the app from the PB-OS team.
+
+## More detail
+
+How the app works inside, how to build it and how the report service is set
+up: [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).
 
 ## License
 

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -43,6 +44,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.projectbarry.pbosinstaller.device.Devices
+import org.projectbarry.pbosinstaller.report.DeviceReport
+import org.projectbarry.pbosinstaller.report.ReportSender
 import org.projectbarry.pbosinstaller.storage.SdCard
 
 @Composable
@@ -103,8 +106,9 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel) {
                             Devices.tested.joinToString(", ") { it.name } + "."
                     )
                     Body(
-                        "Got one of those and still see this? Tap \"Copy device info\" below and send it to us " +
-                            "on Discord, so we can add your device."
+                        "Got one of those and still see this? Tap " +
+                            (if (vm.reportAvailable) "\"Report this device\"" else "\"Copy device info\" and send it to us on Discord") +
+                            " below, so we can add your device."
                     )
                 }
 
@@ -184,6 +188,31 @@ private fun OfferStep(step: Step.Offer, card: SdCard?, vm: InstallerViewModel) {
 private fun DeviceCard(vm: InstallerViewModel) {
     val clipboard = LocalClipboardManager.current
     var open by remember { mutableStateOf(false) }
+    val report by vm.report.collectAsStateWithLifecycle()
+    var preview by remember { mutableStateOf<Map<String, String>?>(null) }
+
+    preview?.let { fields ->
+        AlertDialog(
+            onDismissRequest = { preview = null },
+            title = { Text("Report this device?") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "This goes to the PB-OS team's Discord, so we can add or fix support for this " +
+                            "handheld. It is exactly the text below: model and firmware details that are the " +
+                            "same on every unit, nothing about you."
+                    )
+                    Text(DeviceReport.text(fields), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = {
+                Button(onClick = { vm.sendReport(fields); preview = null }, modifier = Modifier.focusRing()) { Text("Send") }
+            },
+            dismissButton = {
+                TextButton(onClick = { preview = null }, modifier = Modifier.focusRing()) { Text("Cancel") }
+            },
+        )
+    }
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
@@ -199,6 +228,27 @@ private fun DeviceCard(vm: InstallerViewModel) {
             )
             if (open) {
                 Text(vm.info.report(), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+            }
+            val canSend = report == ReportState.Ready || report == ReportState.Done(ReportSender.Result.FAILED)
+            if (vm.reportAvailable) Button(onClick = { preview = vm.reportFields() }, enabled = canSend, modifier = Modifier.focusRing()) {
+                Text(
+                    when (report) {
+                        ReportState.Sending -> "Sending…"
+                        ReportState.Done(ReportSender.Result.SENT), ReportState.Done(ReportSender.Result.DUPLICATE) -> "Reported ✓"
+                        else -> "Report this device"
+                    }
+                )
+            }
+            (report as? ReportState.Done)?.takeIf { vm.reportAvailable }?.let { done ->
+                Text(
+                    when (done.result) {
+                        ReportSender.Result.SENT -> "Sent. Thanks! You can report again tomorrow."
+                        ReportSender.Result.DUPLICATE -> "We already have this report. Thanks!"
+                        ReportSender.Result.LIMIT -> "Too many reports today. Please try again tomorrow."
+                        ReportSender.Result.FAILED -> "Couldn't send the report. Check Wi-Fi and try again."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(

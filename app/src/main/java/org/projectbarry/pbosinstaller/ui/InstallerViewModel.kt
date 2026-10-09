@@ -16,8 +16,18 @@ import org.projectbarry.pbosinstaller.device.TestedDevice
 import org.projectbarry.pbosinstaller.release.ImageDownloader
 import org.projectbarry.pbosinstaller.release.ImageRelease
 import org.projectbarry.pbosinstaller.release.Releases
+import org.projectbarry.pbosinstaller.report.DeviceReport
+import org.projectbarry.pbosinstaller.report.ReportSender
+import org.projectbarry.pbosinstaller.storage.SdBlock
 import org.projectbarry.pbosinstaller.storage.SdCard
 import org.projectbarry.pbosinstaller.storage.SdCardWatcher
+
+/** The "Report this device" button. */
+sealed interface ReportState {
+    data object Ready : ReportState
+    data object Sending : ReportState
+    data class Done(val result: ReportSender.Result) : ReportState
+}
 
 /** Where the user is in the install, in the order the app checks things. */
 sealed interface Step {
@@ -42,6 +52,31 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
     private val watcher = SdCardWatcher(app)
     val card: StateFlow<SdCard?> = watcher.card
     private val downloader = ImageDownloader(app)
+
+    /** False in builds made without the relay address (see docs/HOW-IT-WORKS.md). */
+    val reportAvailable = BuildConfig.REPORT_URL.isNotBlank()
+    private val reporter = ReportSender(app, BuildConfig.REPORT_URL, BuildConfig.VERSION_NAME)
+    private val _report = MutableStateFlow<ReportState>(
+        if (reporter.sentRecently()) ReportState.Done(ReportSender.Result.SENT) else ReportState.Ready
+    )
+    val report: StateFlow<ReportState> = _report
+
+    /** Exactly what "Report this device" would send, for the preview. */
+    fun reportFields(): Map<String, String> =
+        DeviceReport.build(info, BuildConfig.VERSION_NAME, SdBlock.find()?.name, DeviceReport.rootKind())
+
+    fun sendReport(fields: Map<String, String>) {
+        if (!reportAvailable) return
+        if (_report.value != ReportState.Ready && _report.value != ReportState.Done(ReportSender.Result.FAILED)) return
+        if (reporter.sentRecently()) {
+            _report.value = ReportState.Done(ReportSender.Result.SENT)
+            return
+        }
+        _report.value = ReportState.Sending
+        viewModelScope.launch {
+            _report.value = ReportState.Done(withContext(Dispatchers.IO) { reporter.send(fields) })
+        }
+    }
 
     private val _step = MutableStateFlow<Step>(Step.Checking)
     val step: StateFlow<Step> = _step

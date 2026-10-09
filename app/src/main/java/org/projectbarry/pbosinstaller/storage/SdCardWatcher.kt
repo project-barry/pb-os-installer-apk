@@ -9,7 +9,6 @@ import android.os.StatFs
 import android.os.storage.StorageManager
 import android.os.storage.StorageVolume
 import androidx.core.content.ContextCompat
-import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -72,7 +71,7 @@ class SdCardWatcher(private val context: Context) {
         val volumes = storage.storageVolumes.filter { it.isRemovable && !it.isPrimary && it.state !in GONE }
         val volume = volumes.firstOrNull() ?: return null
         // Never judge the card by one partition's size (PB-OS's BOOT is 536 MB).
-        val size = wholeCardBytes() ?: if (volumes.size == 1) {
+        val size = SdBlock.find()?.sizeBytes ?: if (volumes.size == 1) {
             volume.directory?.let { dir -> runCatching { StatFs(dir.path).totalBytes }.getOrNull() }
         } else {
             null
@@ -80,16 +79,6 @@ class SdCardWatcher(private val context: Context) {
         val label = if (volumes.size == 1) volume.getDescription(context) else null
         return SdCard(label, volume.state, size)
     }
-
-    /**
-     * The whole card's size from sysfs (the mmcblk disk whose type is SD; the
-     * Nova's card is mmcblk1), or null where the system doesn't let apps read it.
-     */
-    private fun wholeCardBytes(): Long? = runCatching {
-        File("/sys/block").listFiles { f -> f.name.startsWith("mmcblk") }
-            ?.firstOrNull { File(it, "device/type").readText().trim() == "SD" }
-            ?.let { File(it, "size").readText().trim().toLong() * 512 }
-    }.getOrNull()
 
     private companion object {
         val GONE = setOf(Environment.MEDIA_REMOVED, Environment.MEDIA_BAD_REMOVAL, Environment.MEDIA_EJECTING)

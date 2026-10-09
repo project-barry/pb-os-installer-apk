@@ -13,6 +13,7 @@ data class DeviceInfo(
     val socModel: String,
     val boardPlatform: String,
     val android: String,
+    val fingerprint: String = "",
 ) {
     val soc: Soc? get() = SocCheck.identify(socModel, boardPlatform)
 
@@ -27,6 +28,7 @@ data class DeviceInfo(
         soc_model=$socModel
         board_platform=$boardPlatform
         android=$android
+        fingerprint=$fingerprint
     """.trimIndent()
 
     companion object {
@@ -47,6 +49,7 @@ data class DeviceInfo(
             socModel = if (Build.VERSION.SDK_INT >= 31) Build.SOC_MODEL else getprop("ro.soc.model"),
             boardPlatform = getprop("ro.board.platform"),
             android = "${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
+            fingerprint = Build.FINGERPRINT,
         )
 
         private fun getprop(name: String): String = try {
