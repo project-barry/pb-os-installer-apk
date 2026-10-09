@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -91,14 +92,12 @@ fun InstallerScreen(vm: InstallerViewModel) {
                 verticalArrangement = Arrangement.spacedBy(gap),
             ) {
                 if (wide) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                        Column(Modifier.weight(1.4f), verticalArrangement = Arrangement.spacedBy(gap)) {
-                            Header()
-                            StepCard(step, card, vm)
-                        }
-                        Column(Modifier.weight(1f)) {
-                            DeviceCard(vm)
-                        }
+                    // Title on top, then the two cards side by side: tops aligned and
+                    // the shorter one stretched to the taller one's height.
+                    Header()
+                    Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                        StepCard(step, card, vm, Modifier.weight(1.4f).fillMaxHeight())
+                        DeviceCard(vm, Modifier.weight(1f).fillMaxHeight())
                     }
                 } else {
                     Header()
@@ -180,7 +179,7 @@ private fun Header() {
 }
 
 @Composable
-private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel) {
+private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel, modifier: Modifier = Modifier) {
     // With a controller, each new step's main control is selected at once, so the
     // selection doesn't fall into the device panel when the old button disappears.
     val primary = remember { FocusRequester() }
@@ -191,7 +190,7 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel) {
             runCatching { primary.requestFocus() }
         }
     }
-    Card(Modifier.fillMaxWidth()) {
+    Card(modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             when (step) {
                 Step.LoadingRelease -> Busy("Looking for the newest PB-OS release…")
@@ -326,7 +325,7 @@ private fun OfferStep(step: Step.Offer, card: SdCard?, vm: InstallerViewModel, p
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DeviceCard(vm: InstallerViewModel) {
+private fun DeviceCard(vm: InstallerViewModel, modifier: Modifier = Modifier) {
     val report by vm.report.collectAsStateWithLifecycle()
     var preview by remember { mutableStateOf<Map<String, String>?>(null) }
 
@@ -352,7 +351,7 @@ private fun DeviceCard(vm: InstallerViewModel) {
             },
         )
     }
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+    Card(modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
                 vm.tested?.name ?: "${vm.info.manufacturer} ${vm.info.model}",
