@@ -1,5 +1,10 @@
 package org.projectbarry.pbosinstaller.ui
 
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -126,7 +131,7 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel) {
                 is Step.Failed -> {
                     Title("Something went wrong")
                     Body(step.message)
-                    Button(onClick = vm::retry) { Text("Try again") }
+                    Button(onClick = vm::retry, modifier = Modifier.focusRing()) { Text("Try again") }
                 }
             }
         }
@@ -152,7 +157,8 @@ private fun OfferStep(step: Step.Offer, card: SdCard?, vm: InstallerViewModel) {
     )
     Warning(
         "Installing PB-OS ERASES EVERYTHING on the microSD card" +
-            (card?.let { c -> " (${c.label}${c.sizeBytes?.let { ", ${formatBytes(it)}" } ?: ""})" } ?: "") +
+            (listOfNotNull(card?.label, card?.sizeBytes?.let(::formatBytes))
+                .takeIf { it.isNotEmpty() }?.joinToString(", ", " (", ")") ?: "") +
             ". Copy anything you want to keep off the card first."
     )
     if (card != null && !card.bigEnough) {
@@ -160,13 +166,16 @@ private fun OfferStep(step: Step.Offer, card: SdCard?, vm: InstallerViewModel) {
         return
     }
     Row(
-        Modifier.toggleable(value = understood, role = Role.Checkbox, onValueChange = { understood = it }),
+        Modifier
+            .focusRing(RoundedCornerShape(8.dp))
+            .toggleable(value = understood, role = Role.Checkbox, onValueChange = { understood = it })
+            .padding(end = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Checkbox(checked = understood, onCheckedChange = null)
         Text("I understand the card will be erased")
     }
-    Button(onClick = { vm.download(image) }, enabled = understood) {
+    Button(onClick = { vm.download(image) }, enabled = understood, modifier = Modifier.focusRing()) {
         Text("Download PB-OS")
     }
 }
@@ -192,13 +201,25 @@ private fun DeviceCard(vm: InstallerViewModel) {
                 Text(vm.info.report(), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { clipboard.setText(AnnotatedString(vm.info.report())) }) {
+                OutlinedButton(
+                    onClick = { clipboard.setText(AnnotatedString(vm.info.report())) },
+                    modifier = Modifier.focusRing(),
+                ) {
                     Text("Copy device info")
                 }
-                TextButton(onClick = { open = !open }) { Text(if (open) "Hide details" else "Details") }
+                TextButton(onClick = { open = !open }, modifier = Modifier.focusRing()) { Text(if (open) "Hide details" else "Details") }
             }
         }
     }
+}
+
+/** A clear outline on the focused control, for d-pad and controller users. */
+@Composable
+private fun Modifier.focusRing(shape: Shape = RoundedCornerShape(50)): Modifier {
+    var focused by remember { mutableStateOf(false) }
+    return this
+        .onFocusChanged { focused = it.isFocused }
+        .border(3.dp, if (focused) MaterialTheme.colorScheme.primary else Color.Transparent, shape)
 }
 
 @Composable
