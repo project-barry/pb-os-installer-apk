@@ -291,7 +291,8 @@ private fun CardStep(card: SdCard?, vm: InstallerViewModel, primary: FocusReques
 private fun OfferStep(step: Step.Offer, card: SdCard?, vm: InstallerViewModel, primary: FocusRequester) {
     var understood by rememberSaveable { mutableStateOf(false) }
     val image = step.image
-    Title(image.title)
+    // Release name only: "pb-os alpha v0.5.2: deep sleep on every device" -> "pb-os alpha v0.5.2".
+    Title(image.title.substringBefore(':').trim())
     if (vm.tested == null) {
         Warning("UNTESTED DEVICE: this build allows installing on handhelds PB-OS was never tested on.")
     }
