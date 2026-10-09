@@ -39,7 +39,7 @@ The app matches Android's `Build.MANUFACTURER` and `Build.MODEL`
 | Handheld | Chip | Android strings |
 |---|---|---|
 | Retroid Pocket 6 | SM8550 | `Moorechip` / `Retroid Pocket 6` |
-| Retroid Pocket Nova | SM8550 | placeholder |
+| Retroid Pocket Nova | SM8550 | `Moorechip` / `Retroid Pocket Nova` |
 | AYN Thor | SM8550 | placeholder |
 | KONKR Pocket FIT | SM8650 | placeholder |
 

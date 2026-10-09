@@ -30,6 +30,10 @@ class DeviceTest {
         assertEquals("Retroid Pocket 6", Devices.find(info("Moorechip", "Retroid Pocket 6", "QCS8550"))?.name)
     }
 
+    @Test fun novaIsTested() {
+        assertEquals("Retroid Pocket Nova", Devices.find(info("Moorechip", "Retroid Pocket Nova", "QCS8550"))?.name)
+    }
+
     @Test fun rightModelWrongChipIsNotTested() {
         assertNull(Devices.find(info("Moorechip", "Retroid Pocket 6", "SM8250")))
     }

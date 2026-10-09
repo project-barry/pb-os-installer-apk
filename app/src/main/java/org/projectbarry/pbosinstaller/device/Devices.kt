@@ -22,10 +22,10 @@ object Devices {
     // Only devices pb-os was tested on (see the pb-os README). To add one, get
     // its strings from the app's "Copy device info" button.
     val tested = listOf(
-        // Confirmed: "Moorechip Retroid Pocket 6", SoC "QTI QCS8550" (two public crash reports).
+        // Confirmed from getprop on stock Android 13: ro.soc.model QCS8550, ro.board.platform kalama.
         TestedDevice("Retroid Pocket 6", Soc.SM8550, "Moorechip", "Retroid Pocket 6", listOf("sm8550")),
+        TestedDevice("Retroid Pocket Nova", Soc.SM8550, "Moorechip", "Retroid Pocket Nova", listOf("sm8550")),
         // Placeholders until someone copies the device info from the real device.
-        TestedDevice("Retroid Pocket Nova", Soc.SM8550, PLACEHOLDER, PLACEHOLDER, listOf("sm8550")),
         TestedDevice("AYN Thor", Soc.SM8550, PLACEHOLDER, PLACEHOLDER, listOf("sm8550")),
         TestedDevice("KONKR Pocket FIT", Soc.SM8650, PLACEHOLDER, PLACEHOLDER, listOf("pocketfit")),
     )
