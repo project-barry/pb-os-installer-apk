@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
@@ -41,8 +42,11 @@ class MainActivity : ComponentActivity() {
                 lightColorScheme(primary = Purple, secondary = Purple)
             }
             MaterialTheme(colorScheme = colors) {
-                Surface(Modifier.fillMaxSize().safeDrawingPadding()) {
-                    InstallerScreen(vm)
+                // Background edge to edge, content clear of the bars and any cutout.
+                Surface(Modifier.fillMaxSize()) {
+                    Box(Modifier.fillMaxSize().safeDrawingPadding()) {
+                        InstallerScreen(vm)
+                    }
                 }
             }
         }

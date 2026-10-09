@@ -6,6 +6,10 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
@@ -53,20 +56,40 @@ fun InstallerScreen(vm: InstallerViewModel) {
     val step by vm.step.collectAsStateWithLifecycle()
     val card by vm.card.collectAsStateWithLifecycle()
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Column(Modifier.widthIn(max = 640.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("PB-OS Installer", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            StepCard(step, card, vm)
-            DeviceCard(vm)
+    // Laid out from the window's current size, so it fits any screen shape,
+    // rotation or split-screen: side by side when wide, one column otherwise.
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val gap = if (maxWidth < 400.dp || maxHeight < 400.dp) 12.dp else 20.dp
+        val wide = maxWidth >= 560.dp && maxWidth > maxHeight
+        if (wide) {
+            Row(Modifier.fillMaxSize().padding(gap), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                Column(
+                    Modifier.weight(1.4f).fillMaxHeight().verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(gap),
+                ) {
+                    Header()
+                    StepCard(step, card, vm)
+                }
+                Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) {
+                    DeviceCard(vm)
+                }
+            }
+        } else {
+            Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(gap),
+                verticalArrangement = Arrangement.spacedBy(gap),
+            ) {
+                Header()
+                StepCard(step, card, vm)
+                DeviceCard(vm)
+            }
         }
     }
 }
+
+@Composable
+private fun Header() =
+    Text("PB-OS Installer", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
 
 @Composable
 private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel) {
@@ -184,6 +207,7 @@ private fun OfferStep(step: Step.Offer, card: SdCard?, vm: InstallerViewModel) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DeviceCard(vm: InstallerViewModel) {
     val clipboard = LocalClipboardManager.current
@@ -250,7 +274,8 @@ private fun DeviceCard(vm: InstallerViewModel) {
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Wraps onto a second line on narrow panes (the Nova's right half).
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
                     onClick = { clipboard.setText(AnnotatedString(vm.info.report())) },
                     modifier = Modifier.focusRing(),
