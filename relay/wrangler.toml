@@ -1,0 +1,9 @@
+# Only for `wrangler dev` (local test) and optional CLI deploys.
+# Secrets (DISCORD_WEBHOOK, IP_SALT) are never stored here.
+name = "pbos-device-report"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "replace-with-your-kv-namespace-id"

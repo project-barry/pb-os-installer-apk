@@ -7,3 +7,8 @@ local.properties
 captures/
 *.keystore
 *.jks
+
+# Worker secrets for wrangler dev
+.dev.vars
+.wrangler/
+node_modules/
