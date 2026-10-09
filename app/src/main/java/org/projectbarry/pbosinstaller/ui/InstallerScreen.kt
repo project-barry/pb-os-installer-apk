@@ -207,7 +207,7 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel, modifier
                 Step.Card -> CardStep(card, vm, primary)
 
                 is Step.Ready -> {
-                    Title(if (vm.tested != null) "Your ${vm.handheld} is supported" else "Untested handheld")
+                    Title(if (vm.tested != null) "Good news! Your ${vm.handheld} is supported." else "Untested handheld")
                     if (vm.tested == null) {
                         Warning("UNTESTED DEVICE: this build allows installing on handhelds PB-OS was never tested on.")
                     }
