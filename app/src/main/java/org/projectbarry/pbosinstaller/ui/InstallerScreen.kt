@@ -212,7 +212,7 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel, modifier
                         Warning("UNTESTED DEVICE: this build allows installing on handhelds PB-OS was never tested on.")
                     }
                     if (vm.tested != null) Body("PB-OS has been tested on the ${vm.fullName}.")
-                    Body("If you're ready to try PB-OS, tap the button below.")
+                    Body("Tap the button below to get started.")
                     Button(onClick = vm::lookUpRelease, modifier = Modifier.focusRing().focusRequester(primary)) {
                         Text("Download PB-OS")
                     }
