@@ -40,7 +40,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -51,10 +50,6 @@ import org.projectbarry.pbosinstaller.device.Devices
 import org.projectbarry.pbosinstaller.report.DeviceReport
 import org.projectbarry.pbosinstaller.report.ReportSender
 import org.projectbarry.pbosinstaller.storage.SdCard
-
-/** Plain-English page on what a device report holds and how it's used. */
-private const val REPORT_INFO_URL =
-    "https://github.com/project-barry/pb-os-installer-apk/blob/main/docs/DEVICE-REPORT.md"
 
 @Composable
 fun InstallerScreen(vm: InstallerViewModel) {
@@ -216,8 +211,9 @@ private fun OfferStep(step: Step.Offer, card: SdCard?, vm: InstallerViewModel) {
 @Composable
 private fun DeviceCard(vm: InstallerViewModel) {
     val clipboard = LocalClipboardManager.current
-    val uriHandler = LocalUriHandler.current
     var open by remember { mutableStateOf(false) }
+    var showInfo by remember { mutableStateOf(false) }
+    if (showInfo) ReportInfoDialog(onClose = { showInfo = false })
     val report by vm.report.collectAsStateWithLifecycle()
     var preview by remember { mutableStateOf<Map<String, String>?>(null) }
 
@@ -287,11 +283,7 @@ private fun DeviceCard(vm: InstallerViewModel) {
             }
             // Wraps onto a second line on narrow panes (the Nova's right half).
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    // Opens in the default browser; nothing happens if there is none.
-                    onClick = { runCatching { uriHandler.openUri(REPORT_INFO_URL) } },
-                    modifier = Modifier.focusRing(),
-                ) {
+                OutlinedButton(onClick = { showInfo = true }, modifier = Modifier.focusRing()) {
                     Text("What's in the report?")
                 }
                 OutlinedButton(
@@ -308,7 +300,7 @@ private fun DeviceCard(vm: InstallerViewModel) {
 
 /** A clear outline on the focused control, for d-pad and controller users. */
 @Composable
-private fun Modifier.focusRing(shape: Shape = RoundedCornerShape(50)): Modifier {
+internal fun Modifier.focusRing(shape: Shape = RoundedCornerShape(50)): Modifier {
     var focused by remember { mutableStateOf(false) }
     return this
         .onFocusChanged { focused = it.isFocused }

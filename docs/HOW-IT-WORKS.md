@@ -134,8 +134,10 @@ tampered copy, another key and another namespace.
 **Send Device Report** posts a JSON object to the relay, a Cloudflare Worker,
 which posts it to a Discord channel. The Discord webhook is a secret of the
 Worker and is never in the app or this repo. The app's **What's in the
-report?** button opens [DEVICE-REPORT.md](DEVICE-REPORT.md), the plain-English
-version of this section for users.
+report?** button shows [DEVICE-REPORT.md](DEVICE-REPORT.md), the plain-English
+version of this section for users, in a pop-up. The build copies that file
+into the APK (`CopyReportDoc` in `app/build.gradle.kts`), so each build shows
+the page as it was when it was built, with no browser or internet needed.
 
 ### Fields
 

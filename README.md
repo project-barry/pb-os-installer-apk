@@ -62,8 +62,9 @@ Tap **Send Device Report**. The app shows you exactly what it will send, and
 only sends it when you tap **Send**. The report goes to the Project Barry
 Discord server so we can add your handheld. You can send one a day.
 
-**What's in the report?** opens a short page explaining what the report
-contains and how we use it: [docs/DEVICE-REPORT.md](docs/DEVICE-REPORT.md).
+**What's in the report?** shows a short page explaining what the report
+contains and how we use it. You can also read it here:
+[docs/DEVICE-REPORT.md](docs/DEVICE-REPORT.md).
 
 If you'd rather send it yourself, tap **Copy device info** and paste it to us
 on Discord.

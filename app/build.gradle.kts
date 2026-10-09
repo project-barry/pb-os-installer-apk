@@ -8,6 +8,20 @@ val allowUntested = (findProperty("allowUntested") as String?).toBoolean()
 val reportUrl = ((findProperty("pbosReportUrl") as String?) ?: System.getenv("PBOS_REPORT_URL") ?: "").trim()
 require(reportUrl.isEmpty() || reportUrl.matches(Regex("https://[A-Za-z0-9./_-]+"))) { "pbosReportUrl must be a plain https URL" }
 
+/** Copies docs/DEVICE-REPORT.md into the APK, so the app shows the page as it was at build time. */
+abstract class CopyReportDoc : DefaultTask() {
+    @get:InputFile abstract val doc: RegularFileProperty
+    @get:OutputDirectory abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val out = outputDir.get().asFile
+        out.deleteRecursively()
+        out.mkdirs()
+        doc.get().asFile.copyTo(File(out, "DEVICE-REPORT.md"))
+    }
+}
+
 android {
     namespace = "org.projectbarry.pbosinstaller"
     compileSdk = 35
@@ -55,8 +69,19 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     // Ed25519 for the SSH signature on SHA256SUMS (lightweight API only).
     implementation("org.bouncycastle:bcprov-jdk18on:1.79")
+    // QR code for the Discord invite in "What's in the report?".
+    implementation("com.google.zxing:core:3.5.3")
 
     testImplementation("junit:junit:4.13.2")
     // android.jar's org.json is a stub in local unit tests.
     testImplementation("org.json:json:20240303")
+}
+
+androidComponents {
+    onVariants { variant ->
+        val copy = tasks.register<CopyReportDoc>("copy${variant.name.replaceFirstChar { it.uppercase() }}ReportDoc") {
+            doc.set(rootProject.layout.projectDirectory.file("docs/DEVICE-REPORT.md"))
+        }
+        variant.sources.assets?.addGeneratedSourceDirectory(copy, CopyReportDoc::outputDir)
+    }
 }
