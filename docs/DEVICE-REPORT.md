@@ -32,5 +32,5 @@ keeps only a scrambled version of it, for two days, to stop spam.
 - To fix problems on particular models or firmware versions
 
 Reports are posted in a channel that members of the Project Barry Discord can
-read. Each handheld can send one report a day. If you'd like yours removed,
-ask us on [Discord](https://discord.gg/euPurKCWc4).
+read. If you'd like yours removed, ask us on
+[Discord](https://discord.gg/euPurKCWc4).

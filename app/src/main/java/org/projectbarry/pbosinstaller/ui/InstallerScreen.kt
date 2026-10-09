@@ -273,9 +273,9 @@ private fun DeviceCard(vm: InstallerViewModel) {
             (report as? ReportState.Done)?.takeIf { vm.reportAvailable }?.let { done ->
                 Text(
                     when (done.result) {
-                        ReportSender.Result.SENT -> "Sent. Thanks! You can report again tomorrow."
+                        ReportSender.Result.SENT -> "Sent. Thanks!"
                         ReportSender.Result.DUPLICATE -> "We already have this report. Thanks!"
-                        ReportSender.Result.LIMIT -> "Too many reports today. Please try again tomorrow."
+                        ReportSender.Result.LIMIT -> "Too many reports right now. Please try again later."
                         ReportSender.Result.FAILED -> "Couldn't send the report. Check Wi-Fi and try again."
                     },
                     style = MaterialTheme.typography.bodyMedium,
