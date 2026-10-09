@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="pbos_purple">#8C00FF</color>
+    <!-- Project Barry logo red. -->
+    <color name="ic_launcher_background">#FA3838</color>
+    <!-- App background, also shown while the app starts. -->
+    <color name="window_background">#121016</color>
 </resources>
