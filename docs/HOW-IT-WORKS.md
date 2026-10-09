@@ -22,7 +22,7 @@ WrongChip                                       (stop)
 Card ──[Continue]──▶ Untested                    (stop, unless -PallowUntested=true)
   ▲          │
   │          ▼
-  │        Ready ──[Look up newest release]──▶ LoadingRelease ─▶ Offer
+  │        Ready ──[Download PB-OS]──▶ LoadingRelease ─▶ Offer
   │                                                                │
   │                                              [Download PB-OS] ▼
   │                                     Downloading ─▶ Verifying ─▶ Downloaded

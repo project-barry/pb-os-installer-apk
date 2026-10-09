@@ -48,10 +48,10 @@ The app asks you before each step and never moves on by itself.
 2. **Put in a microSD card and tap Continue.** The app checks that the card is
    big enough and that your handheld is one we have tested PB-OS on, so nobody
    ends up with a system that doesn't work on their hardware.
-3. **Tap Look up newest release.** The app finds the newest PB-OS on GitHub.
-   Nothing is downloaded yet.
-4. **Download.** Tick "I understand the card will be erased" and tap
-   **Download PB-OS**. You can leave the app while it downloads. When it's
+3. **Tap Download PB-OS.** The app finds the newest PB-OS on GitHub and shows
+   its size.
+4. **Confirm.** Tick "I understand the card will be erased" and tap
+   **Download PB-OS** again to start the download. You can leave the app while it downloads. When it's
    done, the app checks that the download is complete and really comes from
    the PB-OS team.
 

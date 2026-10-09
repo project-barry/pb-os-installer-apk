@@ -214,9 +214,12 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel, modifier
                         "${vm.tested?.name ?: "${vm.info.manufacturer} ${vm.info.model}"} · ${vm.info.soc?.label}" +
                             (if (vm.tested != null) "\nPB-OS has been tested on this handheld." else "")
                     )
-                    Body("Next, the app looks up the newest PB-OS release on GitHub. Nothing is downloaded yet.")
+                    Body(
+                        "Tap Download PB-OS to find the newest release on GitHub. You'll see its size " +
+                            "and confirm before anything downloads."
+                    )
                     Button(onClick = vm::lookUpRelease, modifier = Modifier.focusRing().focusRequester(primary)) {
-                        Text("Look up newest release")
+                        Text("Download PB-OS")
                     }
                 }
 

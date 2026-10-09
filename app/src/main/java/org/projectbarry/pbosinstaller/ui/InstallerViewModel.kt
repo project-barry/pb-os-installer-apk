@@ -39,7 +39,7 @@ sealed interface Step {
     /** Waiting for the user to insert a card and tap Continue. */
     data object Card : Step
     data object Untested : Step
-    /** Model checked; waiting for the user to tap "Look up newest release". */
+    /** Model checked; waiting for the user to tap "Download PB-OS" (looks up the release). */
     data class Ready(val images: List<String>) : Step
     data object LoadingRelease : Step
     data class Offer(val image: ImageRelease, val needed: Long, val free: Long) : Step
@@ -116,7 +116,7 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** "Look up newest release": the first time the app goes online. */
+    /** "Download PB-OS" on the Ready step: looks up the release, the first time the app goes online. */
     fun lookUpRelease() {
         val ready = _step.value as? Step.Ready ?: return
         _step.value = Step.LoadingRelease
