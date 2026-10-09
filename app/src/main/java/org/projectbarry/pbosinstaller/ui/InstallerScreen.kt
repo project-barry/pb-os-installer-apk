@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -101,8 +102,12 @@ fun InstallerScreen(vm: InstallerViewModel) {
                         StepCard(step, card, vm, Modifier.weight(1.4f).fillMaxHeight())
                         DeviceCard(vm, Modifier.weight(1f).fillMaxHeight())
                     }
+                } else if (wide) {
+                    // On its own, the step card is only as wide as its contents (capped so
+                    // long text still wraps into readable lines).
+                    StepCard(step, card, vm, Modifier.widthIn(max = 600.dp))
                 } else {
-                    StepCard(step, card, vm)
+                    StepCard(step, card, vm, Modifier.fillMaxWidth())
                     if (showDevice) DeviceCard(vm)
                 }
             }
@@ -191,7 +196,7 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel, modifier
             runCatching { primary.requestFocus() }
         }
     }
-    Card(modifier.fillMaxWidth()) {
+    Card(modifier) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             when (step) {
                 Step.LoadingRelease -> Busy("Looking for the newest PB-OS release…")
