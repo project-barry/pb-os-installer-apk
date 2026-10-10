@@ -7,8 +7,8 @@ import java.util.UUID
 
 /**
  * Prepares a card write and follows it. The write runs as root ([WriteScript]);
- * [RootJobs] starts it through xsu where the handheld has it, or saves the
- * launcher for "Run Script as Root".
+ * [RootJobs] starts it itself where the handheld allows (xsu, Retroid's root
+ * service), or saves the launcher for "Run Script as Root".
  */
 class CardWriter(context: Context) {
     private val jobs = RootJobs(context)
@@ -37,8 +37,11 @@ class CardWriter(context: Context) {
         return jobs.prepare(name, id, body, mapOf("tag" to tag))
     }
 
-    /** Starts the prepared job through xsu. */
-    fun start(): Boolean = jobs.startWithXsu(name)
+    /** Starts the prepared job as root (xsu or the root service). */
+    fun start(): Boolean = jobs.start(name)
+
+    /** The Run Script as Root launcher, when [start] failed on a Retroid. */
+    fun fallbackLauncher(): String? = jobs.fallbackLauncher(name)
 
     fun status(): RootJobs.Status? = jobs.status(name)
 

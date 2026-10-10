@@ -12,16 +12,18 @@ import java.io.File
  * How a script gets root depends on the handheld:
  * - [Route.Xsu]: AYANEO/KONKR firmware has /product/bin/xsu, which any app may use;
  *   the app starts the script itself.
+ * - [Route.PServer]: Retroid firmware has a root service any app may call ([PServer]);
+ *   the app starts the script itself.
  * - [Route.RunScriptAsRoot]: Retroid's Handheld Settings → Advanced → Run Script as
  *   Root runs a file line by line, so the app saves a one-line launcher in Downloads
- *   and the user runs it there.
+ *   and the user runs it there. Used when the root service can't be reached.
  * - [Route.Manual]: anything else; same launcher, run as root however the handheld allows.
  *
  * Every job script starts with [ScriptKit.prelude], which moves it off shared
  * storage and into the background, so both routes return at once.
  */
 class RootJobs(private val context: Context) {
-    enum class Route { Xsu, RunScriptAsRoot, Manual }
+    enum class Route { Xsu, PServer, RunScriptAsRoot, Manual }
 
     /** A job's latest status: the script's state plus any extra key=value lines it reported. */
     data class Status(
@@ -35,11 +37,17 @@ class RootJobs(private val context: Context) {
         val ageMs: Long,
     )
 
-    val route: Route = when {
-        File(XSU).exists() -> Route.Xsu
-        android.os.Build.MANUFACTURER.equals("Moorechip", ignoreCase = true) -> Route.RunScriptAsRoot
-        else -> Route.Manual
+    /** Found on first use (it runs a command as root, so not on the main thread). */
+    val route: Route by lazy {
+        when {
+            File(XSU).exists() -> Route.Xsu
+            PServer.works() -> Route.PServer
+            isRetroid -> Route.RunScriptAsRoot
+            else -> Route.Manual
+        }
     }
+
+    private val isRetroid = android.os.Build.MANUFACTURER.equals("Moorechip", ignoreCase = true)
 
     private val prefs = context.getSharedPreferences("root-jobs", Context.MODE_PRIVATE)
     private fun dir(name: String) = File(context.getExternalFilesDir(null), name).apply { mkdirs() }
@@ -63,15 +71,40 @@ class RootJobs(private val context: Context) {
             putString("job.$name", id)
             extras.forEach { (k, v) -> putString("$name.$k", v) }
         }.apply()
-        return if (route == Route.Xsu) null else saveLauncher(name, "sh ${rootPath(scriptFile(name))}\n")
+        return if (route == Route.Xsu || route == Route.PServer) null else saveLauncher(name, launcherText(name))
     }
 
-    /** Starts the job through xsu (the script detaches itself, so this returns at once). */
-    fun startWithXsu(name: String): Boolean = runCatching {
-        val p = ProcessBuilder(XSU, "sh", rootPath(scriptFile(name))).redirectErrorStream(true).start()
-        p.inputStream.readBytes()
-        p.waitFor() == 0
-    }.getOrDefault(false)
+    /**
+     * Starts the job as root itself (xsu or the root service). The script detaches
+     * itself, so this returns once it has reported "started".
+     */
+    fun start(name: String): Boolean {
+        val script = rootPath(scriptFile(name))
+        val launched = when (route) {
+            Route.Xsu -> runCatching {
+                val p = ProcessBuilder(XSU, "sh", script).redirectErrorStream(true).start()
+                p.inputStream.readBytes()
+                p.waitFor() == 0
+            }.getOrDefault(false)
+            Route.PServer -> PServer.run("sh ${ScriptKit.quote(script)}") != null
+            else -> false
+        }
+        return launched && waitForStatus(name)
+    }
+
+    /** When [start] failed on a Retroid: the launcher for Run Script as Root instead. */
+    fun fallbackLauncher(name: String): String? =
+        if (isRetroid) saveLauncher(name, launcherText(name)) else null
+
+    private fun launcherText(name: String) = "sh ${rootPath(scriptFile(name))}\n"
+
+    private fun waitForStatus(name: String): Boolean {
+        repeat(50) {
+            if (statusFile(name).exists()) return true
+            Thread.sleep(100)
+        }
+        return false
+    }
 
     fun status(name: String): Status? {
         val job = currentJob(name) ?: return null

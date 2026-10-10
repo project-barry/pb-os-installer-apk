@@ -74,7 +74,8 @@ class AblSetup(private val context: Context, private val info: DeviceInfo, priva
         return jobs.prepare(AblScript.INSTALL, id, body)
     }
 
-    fun start(job: String): Boolean = jobs.startWithXsu(job)
+    fun start(job: String): Boolean = jobs.start(job)
+    fun fallbackLauncher(job: String): String? = jobs.fallbackLauncher(job)
     fun status(job: String): RootJobs.Status? = jobs.status(job)
     fun clear(job: String) = jobs.clear(job)
 

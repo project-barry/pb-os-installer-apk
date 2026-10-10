@@ -167,7 +167,7 @@ The report is built from this fixed list and nothing else:
 | `fingerprint` | `Build.FINGERPRINT` | see below |
 | `sd_block` | the SD card's disk in `/sys/block` | `mmcblk1` |
 | `sd_type` | `SD`, or `none` without a readable card | `SD` |
-| `root` | `xsu`, `su` or `none` | `none` |
+| `root` | `xsu`, `pservice`, `su` or `none` | `pservice` |
 
 **`fingerprint`** is Android's build fingerprint, the firmware's identity, not
 a biometric. Format:
@@ -189,9 +189,9 @@ compiled the firmware. On stock firmware that's the maker's build machine
 would be that person's own computer user name. We send the fingerprint
 unchanged; the README explains this to users.
 
-`root` is found by looking for files only (`/product/bin/xsu`, the KONKR/AYANEO
-vendor helper, then the usual `su` paths), never by running them, which could
-pop up a Magisk prompt.
+`root` is found by looking only, never by running anything, which could pop
+up a Magisk prompt: `/product/bin/xsu` (the KONKR/AYANEO vendor helper), then
+Retroid's `PServerBinder` service, then the usual `su` paths.
 
 Nothing else is read: no serial number, Android ID, account, IMEI, location,
 network or Wi-Fi details.
@@ -282,20 +282,26 @@ The virtual card is 536 MB, so the "card too small" warning shows. For a full
 download test, give the emulator at least 16 GB of data space
 (`disk.dataPartition.size` in the AVD's `config.ini`).
 
-## Coming next
+## Root
 
-Writing the image needs root, because Android doesn't let apps write the card
-as a raw disk. The plan:
+Writing the card and the boot loader steps need root, because Android doesn't
+let apps write the card as a raw disk or touch the `abl_a`/`abl_b` partitions.
+The app writes each job as a shell script into its own folder and starts it
+the first way that works:
 
-- Root, in order of preference: `su` (Magisk), the KONKR/AYANEO vendor helper
-  `/product/bin/xsu` (present on stock Pocket FIT firmware), otherwise the
-  handheld's own **Run script as root** setting, which runs a script the app
-  writes to `/sdcard/pb-os/`.
-- The script unmounts the card, refuses unless the target is the SD disk
-  (`device/type == SD`, size as expected), unpacks the `.7z` parts with a
-  bundled arm64 `7zz` straight onto the card, and writes progress to a file
-  the app shows.
-- ROCKNIX ABL: the same root script backs up both ABL slots, recognises stock,
-  ROCKNIX 1.1.8 and 1.2 by hash, flashes the bundled ABL for the chip and reads
-  it back. Without root, the app copies the `rocknix_abl/<chip>` folder to
-  internal storage and shows plain step-by-step instructions instead.
+1. **`xsu`** (KONKR/AYANEO): `/product/bin/xsu` talks to the vendor's root
+   daemon over a socket any app may use. The app runs `xsu sh <script>`.
+2. **Retroid's root service**: the binder service `PServerBinder`, served by
+   `/system/bin/pservice` (the service behind Handheld Settings → Advanced →
+   Run Script as Root). Any app may call it: call code 0 with the string array
+   `[command, "1"]` runs the command as root and replies with its output. The
+   app checks it with `id -u` first. `service call` can't reach it because the
+   service declares no interface name, so the app calls it directly.
+3. **Run Script as Root** by hand, when neither works on a Retroid: the app
+   saves a one-line launcher (`sh <script>`) in Downloads and the user runs it
+   from Handheld Settings. That runner sends a file line by line, which is why
+   the launcher is one line.
+
+Every job script first copies itself to `/data/local/tmp` and carries on in
+the background, so the call returns at once and an Android system restart
+can't stop it. It reports progress to a status file the app reads.

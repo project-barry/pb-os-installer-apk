@@ -37,11 +37,13 @@ object DeviceReport {
     fun text(fields: Map<String, String>): String = fields.entries.joinToString("\n") { "${it.key}=${it.value}" }
 
     /**
-     * Which root helper the device has, by looking for the file only: running
-     * `su` could pop up a Magisk prompt. xsu = the KONKR/AYANEO vendor helper.
+     * Which root helper the device has, by looking for it only: running `su`
+     * could pop up a Magisk prompt. xsu = the KONKR/AYANEO vendor helper,
+     * pservice = Retroid's root service.
      */
     fun rootKind(): String = when {
         File("/product/bin/xsu").exists() -> "xsu"
+        org.projectbarry.pbosinstaller.root.PServer.present() -> "pservice"
         SU_PATHS.any { File(it).exists() } -> "su"
         else -> "none"
     }

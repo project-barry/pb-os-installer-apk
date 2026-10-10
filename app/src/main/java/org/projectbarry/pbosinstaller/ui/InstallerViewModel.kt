@@ -226,10 +226,11 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
                 if (launcher != null) {
                     Step.RunScript(tag, launcher)
                 } else if (withContext(Dispatchers.IO) { writer.start() }) {
-                    // The handheld lets the app run it as root itself (xsu): no detour.
+                    // The handheld lets the app run it as root itself: no detour.
                     Step.Writing(tag, "started", 0, 0)
                 } else {
-                    Step.Failed("Couldn't start the card write as root.", downloaded)
+                    withContext(Dispatchers.IO) { writer.fallbackLauncher() }?.let { Step.RunScript(tag, it) }
+                        ?: Step.Failed("Couldn't start the card write as root.", downloaded)
                 }
             } catch (e: Exception) {
                 Step.Failed("Couldn't prepare the card write (${e.message}).", downloaded)
@@ -308,7 +309,8 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
                 when {
                     launcher != null -> Step.AblRunScript(job, launcher)
                     withContext(Dispatchers.IO) { setup.start(job) } -> Step.AblWorking(job)
-                    else -> Step.Failed("Couldn't start the boot loader step as root.", back)
+                    else -> withContext(Dispatchers.IO) { setup.fallbackLauncher(job) }?.let { Step.AblRunScript(job, it) }
+                        ?: Step.Failed("Couldn't start the boot loader step as root.", back)
                 }
             } catch (e: Exception) {
                 Step.Failed("Couldn't prepare the boot loader step (${e.message}).", back)
