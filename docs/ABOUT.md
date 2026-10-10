@@ -10,9 +10,12 @@ you before each step.
 3. Finds the newest PB-OS release on GitHub.
 4. Downloads it and checks that it's complete and really comes from the PB-OS
    team.
-5. Writes it to the microSD card, erasing what's on it. *(Coming soon)*
-6. Sets up the boot menu so your handheld can start PB-OS from the card, after
-   saving a copy of the original. *(Coming soon)*
+5. Writes it to the microSD card, erasing what's on it, and reads it back to
+   check every byte.
+6. Sets up the boot menu (ROCKNIX ABL, by the ROCKNIX team) so your handheld
+   can start PB-OS from the card, after saving a copy of the original.
+7. To start PB-OS: hold Volume Down while you turn the handheld on. Android is
+   still there, in the same menu.
 
 The app is free and open source:
 [github.com/project-barry/pb-os-installer-apk](https://github.com/project-barry/pb-os-installer-apk)

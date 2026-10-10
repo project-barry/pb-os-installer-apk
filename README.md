@@ -53,6 +53,24 @@ The app asks you before each step and never moves on by itself.
    **Download PB-OS** to start the download. You can leave the app while it downloads. When it's
    done, the app checks that the download is complete and really comes from
    the PB-OS team.
+5. **Write to SD Card.** The app writes PB-OS to the card, then reads it all
+   back to check every byte. This takes about 10 minutes. Keep the card in;
+   the screen stays on while it works.
+6. **Set Up Boot Menu.** Your handheld needs a boot menu to start PB-OS from
+   the card. First the app saves a copy of your handheld's own boot loader.
+   **Save that copy somewhere else too** (a USB drive, Google Drive, your
+   computer): you need it to go back to stock Android or to install Android
+   updates. Then tap **Install Boot Menu**.
+7. **Start PB-OS.** Turn the handheld off and hold **Volume Down** while you
+   turn it on. In the menu, set the device model, set the boot mode to Linux
+   and the boot source to the SD card, then start. Android is still there:
+   choose it in the same menu.
+
+Steps 5 and 6 need full access to the handheld ("root"). On the Retroid
+Pocket 6, Retroid Pocket Nova, AYN Thor and KONKR Pocket FIT the app gets it
+by itself. If a Retroid handheld refuses, the app saves a small script and
+shows you how to run it from **Handheld Settings → Advanced → Run Script as
+Root**.
 
 You can use the touch screen or the controller: the d-pad moves between
 buttons and **A** presses them.
@@ -76,7 +94,19 @@ device info** under your report and paste it to us on Discord.
 
 ## Getting the app
 
-There's no public download yet. Testers get the app from the PB-OS team.
+Download the newest `.apk` from
+[Releases](https://github.com/project-barry/pb-os-installer-apk/releases) on
+your handheld and open it. Android asks you to allow installing apps from your
+browser or file manager the first time.
+
+## The boot menu
+
+The boot menu is **ROCKNIX ABL** (version 1.2), made by the
+[ROCKNIX team](https://github.com/ROCKNIX/abl). The app carries an unchanged
+copy of their release for the Snapdragon 8 Gen 2 and 8 Gen 3, so it can
+install it without another download, and checks it before installing. ROCKNIX
+ABL is provided as is; its authors have not published a licence for it. All
+credit for it goes to the ROCKNIX team.
 
 ## More detail
 
@@ -92,6 +122,11 @@ The app includes libraries under the Apache License 2.0 (AndroidX, Jetpack
 Compose, Kotlin, ZXing), which works with GPL version 3 but not version 2
 alone, so the app as built and installed is distributed under **GPL version
 3**. Bouncy Castle uses an MIT-style licence, which works with both.
+
+The app also carries two programs it doesn't link to, unchanged: 7-Zip's
+`7zzs` (GNU LGPL) and the ROCKNIX ABL boot menu (see
+[The boot menu](#the-boot-menu)). Details:
+[docs/LICENSES.md](docs/LICENSES.md).
 
 - [LICENSE](LICENSE): GPL version 2
 - [LICENSES/](LICENSES/): GPL version 3, Apache License 2.0, Bouncy Castle Licence

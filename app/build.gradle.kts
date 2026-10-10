@@ -37,8 +37,8 @@ android {
         applicationId = "org.projectbarry.pbosinstaller"
         minSdk = 30
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
         buildConfigField("boolean", "ALLOW_UNTESTED", allowUntested.toString())
         buildConfigField("String", "RELEASES_REPO", "\"project-barry/pb-os\"")
         // Device-report relay (relay/worker.js), kept out of the repo: set pbosReportUrl in
@@ -46,8 +46,22 @@ android {
         buildConfigField("String", "REPORT_URL", "\"$reportUrl\"")
     }
 
+    // Release signing key, kept out of the repo: pbosKeystore (path), pbosKeystorePassword,
+    // pbosKeyAlias and pbosKeyPassword in ~/.gradle/gradle.properties. Without them the
+    // release build is left unsigned. Updates must be signed with the same key.
+    val keystore = findProperty("pbosKeystore") as String?
+    signingConfigs {
+        if (keystore != null) create("release") {
+            storeFile = file(keystore)
+            storePassword = findProperty("pbosKeystorePassword") as String
+            keyAlias = findProperty("pbosKeyAlias") as String
+            keyPassword = findProperty("pbosKeyPassword") as String
+        }
+    }
+
     buildTypes {
         release {
+            if (keystore != null) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }

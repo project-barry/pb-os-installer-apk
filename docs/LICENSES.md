@@ -20,6 +20,13 @@ version 3 of the GPL. So the app, as you install it, comes to you under
   [7-zip.org](https://www.7-zip.org/), shipped inside the app as `lib7zzs.so`; its source code is
   at [7-zip.org](https://www.7-zip.org/download.html).
 
+- **ROCKNIX ABL 1.2** by the ROCKNIX team (the boot menu the app installs):
+  the unchanged `abl_signed-SM8550.elf` and `abl_signed-SM8650.elf` from their
+  [v1.2 release](https://github.com/ROCKNIX/abl/releases). The ROCKNIX team has
+  not published a licence for it; it is provided as is, and all credit goes to
+  them. It is a separate program the app writes to the boot loader partitions;
+  the app's licence does not cover it.
+
 The app icon is the Project Barry logo.
 
 The full licence texts follow.
