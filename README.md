@@ -12,7 +12,7 @@
 >
 > **Watch Project Barry on YouTube:** https://www.youtube.com/@Project-Barry
 
-An Android app that puts [PB-OS](https://github.com/project-barry/pb-os) on a
+An Android app that puts [PB-OS](https://github.com/project-barry/pb-os), our port of Steam OS, on a
 microSD card, right on your handheld. No computer needed.
 
 > [!WARNING]
