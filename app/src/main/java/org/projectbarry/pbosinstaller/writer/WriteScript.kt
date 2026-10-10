@@ -116,7 +116,7 @@ if [ -z "${'$'}DRY_RUN_TARGET" ]; then
     if [ "${'$'}OLD_BYTES" != 0 ]; then echo "${'$'}OLD_BYTES" > ${'$'}VM/dirty_bytes; else echo "${'$'}OLD_RATIO" > ${'$'}VM/dirty_ratio; fi
     if [ "${'$'}OLD_BG_BYTES" != 0 ]; then echo "${'$'}OLD_BG_BYTES" > ${'$'}VM/dirty_background_bytes; else echo "${'$'}OLD_BG_RATIO" > ${'$'}VM/dirty_background_ratio; fi
   }
-  trap 'restore_vm; rm -f "${'$'}RUN_COPY"' EXIT
+  trap 'restore_vm; on_exit' EXIT
   echo 16777216 > ${'$'}VM/dirty_background_bytes
   echo 67108864 > ${'$'}VM/dirty_bytes
 fi

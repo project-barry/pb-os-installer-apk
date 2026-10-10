@@ -13,18 +13,30 @@ object ScriptKit {
      *
      * [status] writes the status file (key=value lines, replaced atomically, handed to
      * the app's folder owner so the app can read it); extra lines go in $EXTRA.
+     *
+     * The job holds a kernel wake lock until it exits: if the handheld tried to
+     * sleep mid-job, the kernel would first flush everything still waiting for
+     * the card, Android's sleep service would hang behind it, and the watchdog
+     * would restart the system (seen on the Thor when its screen turned off).
+     * Scripts that set their own EXIT trap call [on_exit] from it.
      * [ge] compares whole numbers of any size: Android's shell does 32-bit arithmetic
      * and toybox expr's comparisons go wrong on big numbers.
      */
     fun prelude(name: String, id: String, statusFile: String, dryRun: Boolean = false): String {
         val run = "/data/local/tmp/pbos-$name.sh"
-        val detach = if (dryRun) "" else """
+        val detach = if (dryRun) "on_exit() { :; }\n" else """
 RUN_COPY=${quote(run)}
 if [ "${'$'}0" != "${'$'}RUN_COPY" ]; then
   cp "${'$'}0" "${'$'}RUN_COPY" && { nohup sh "${'$'}RUN_COPY" >/dev/null 2>&1 & }
   exit 0
 fi
-trap 'rm -f "${'$'}RUN_COPY"' EXIT
+WAKE_LOCK=${quote("pbos-$name")}
+on_exit() {
+  { echo "${'$'}WAKE_LOCK" > /sys/power/wake_unlock; } 2>/dev/null
+  rm -f "${'$'}RUN_COPY"
+}
+trap on_exit EXIT
+{ echo "${'$'}WAKE_LOCK" > /sys/power/wake_lock; } 2>/dev/null
 """
         return """
 #!/system/bin/sh

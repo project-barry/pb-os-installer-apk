@@ -39,7 +39,7 @@ class WriteScriptTest {
             "sm unmount",
             "expr \"${'$'}(cat /sys/block/${'$'}DEV/size)\" '*' 512", // 64-bit card size
             "echo 67108864 > ${'$'}VM/dirty_bytes", // no system stall while writing
-            "trap 'restore_vm; rm -f \"${'$'}RUN_COPY\"' EXIT", // settings back, copy gone
+            "trap 'restore_vm; on_exit' EXIT", // settings back, wake lock released, copy gone
         ).forEach { assertTrue(it, it in body) }
         assertTrue("rereadpt" !in body)
         // No shell arithmetic or -ge/-gt on byte counts: Android's shell is 32-bit.
@@ -52,6 +52,8 @@ class WriteScriptTest {
         // Moves itself off shared storage and into the background.
         assertTrue("RUN_COPY='/data/local/tmp/pbos-write.sh'" in body)
         assertTrue("nohup sh" in body)
+        // Stays awake until it exits: a sleep attempt mid-write hangs the system.
+        assertTrue("> /sys/power/wake_lock" in body && "> /sys/power/wake_unlock" in body)
         // The dry run stays in the foreground (adb waits for it).
         assertTrue("RUN_COPY" !in WriteScript.body(job.copy(dryRunTarget = "/dev/null")).substringBefore("SEVENZIP="))
     }

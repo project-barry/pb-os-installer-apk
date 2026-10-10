@@ -37,6 +37,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,6 +64,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
@@ -84,6 +86,15 @@ import org.projectbarry.pbosinstaller.storage.SdCard
 fun InstallerScreen(vm: InstallerViewModel) {
     val step by vm.step.collectAsStateWithLifecycle()
     val card by vm.card.collectAsStateWithLifecycle()
+    // Screen stays on while a root job runs, so the progress stays in view (the
+    // job itself also keeps the handheld awake, see ScriptKit).
+    val busy = step is Step.Writing || step is Step.CardCheck || step is Step.AblWorking ||
+        step is Step.RunScript || step is Step.AblRunScript
+    val view = LocalView.current
+    DisposableEffect(busy) {
+        view.keepScreenOn = busy
+        onDispose { view.keepScreenOn = false }
+    }
     // A new scroll position for each orientation: rotating starts the page from the
     // top, in the same frame as the new layout (no scroll animation afterwards).
     val orientation = LocalConfiguration.current.orientation
