@@ -42,6 +42,12 @@ class WriteScriptTest {
             "trap 'restore_vm; on_exit' EXIT", // settings back, wake lock released, copy gone
         ).forEach { assertTrue(it, it in body) }
         assertTrue("rereadpt" !in body)
+        // The card's mounts are found by device number and must all be gone before
+        // writing; a lazy unmount leaves the old filesystem writing into the image.
+        assertTrue("/proc/self/mountinfo" in body)
+        assertTrue("tr '_,' '::'" in body) // public:179_1 and public:179,1
+        assertTrue("Android is still using the card" in body)
+        assertTrue("umount -l" !in body)
         // No shell arithmetic or -ge/-gt on byte counts: Android's shell is 32-bit.
         assertTrue(Regex("""\* 512|-ge "\$\{?(SIZE|IMAGE_BYTES)""").find(body) == null)
     }

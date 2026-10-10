@@ -93,14 +93,26 @@ $partChecks
 if [ -z "${'$'}DRY_RUN_TARGET" ]; then
   TARGET=/dev/block/${'$'}DEV
   status unmounting
-  # Unmount only this card's volumes (same major number, minors of this disk).
-  DMIN=${'$'}(cut -d: -f2 /sys/block/${'$'}DEV/dev)
-  for v in ${'$'}(sm list-volumes public 2>/dev/null | cut -d' ' -f1); do
-    mm=${'$'}{v#public:}; maj=${'$'}{mm%,*}; min=${'$'}{mm#*,}
-    [ "${'$'}maj" = 179 ] && [ "${'$'}min" -ge "${'$'}DMIN" ] && [ "${'$'}min" -lt ${'$'}((DMIN + 8)) ] && sm unmount "${'$'}v"
+  # The card and its partitions as major:minor, e.g. "179:0 179:1". Mounts are found
+  # by these numbers, never by name: Android names a volume public:179,1 on some
+  # versions and public:179_1 on others (Android 14 on the KONKR Pocket FIT).
+  CARD_MM=${'$'}(cat /sys/block/${'$'}DEV/dev)
+  for p in /sys/block/${'$'}DEV/${'$'}DEV*; do
+    [ -r "${'$'}p/dev" ] && CARD_MM="${'$'}CARD_MM ${'$'}(cat "${'$'}p/dev")"
   done
-  sleep 2
-  for m in ${'$'}(grep -E "^/dev/block/(vold/public:179,|${'$'}DEV)" /proc/mounts | cut -d' ' -f2); do umount -l "${'$'}m"; done
+  on_card() { case " ${'$'}CARD_MM " in *" ${'$'}1 "*) return 0 ;; esac; return 1; }
+  card_mounts() { # mount points backed by the card, from /proc/self/mountinfo
+    while read -r _ _ mm _ mp _; do on_card "${'$'}mm" && echo "${'$'}mp"; done < /proc/self/mountinfo
+  }
+  # Let vold unmount its volumes: it also stops the apps using them. A lazy unmount
+  # is not enough: the old filesystem stays alive and writes into the new image.
+  for v in ${'$'}(sm list-volumes public 2>/dev/null | cut -d' ' -f1); do
+    on_card "${'$'}(echo "${'$'}{v#public:}" | tr '_,' '::')" && sm unmount "${'$'}v"
+  done
+  n=0
+  while [ -n "${'$'}(card_mounts)" ] && [ ${'$'}n -lt 10 ]; do sleep 1; n=${'$'}((n + 1)); done
+  for m in ${'$'}(card_mounts); do umount "${'$'}m" 2>/dev/null; done
+  [ -z "${'$'}(card_mounts)" ] || fail "Android is still using the card. Eject it in Settings → Storage, then try again."
 else
   TARGET=${'$'}DRY_RUN_TARGET
 fi
