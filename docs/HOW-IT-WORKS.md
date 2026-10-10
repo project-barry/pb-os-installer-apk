@@ -84,12 +84,12 @@ entry (case ignored) **and** its chip matches the entry's chip.
 |---|---|---|---|
 | Retroid Pocket 6 | SM8550 | `Moorechip` / `Retroid Pocket 6` | `sm8550` |
 | Retroid Pocket Nova | SM8550 | `Moorechip` / `Retroid Pocket Nova` | `sm8550` |
-| AYN Thor | SM8550 | placeholder | `sm8550` |
+| AYN Thor | SM8550 | `AYN` / `AYN Thor` | `sm8550` |
 | KONKR Pocket FIT | SM8650 | `AYANEO` / `Pocket FIT` | `pocketfit` |
 
-RP6 and Nova strings come from `getprop` on their stock Android 13. A
-placeholder never matches, so those handhelds are treated as untested until a
-device report fills them in.
+The strings come from `getprop` on each handheld's stock Android (13 on the
+RP6, Nova and Thor, 14 on the Pocket FIT). A future entry can use the
+placeholder value, which never matches, until a device report fills it in.
 
 ### Untested handhelds
 

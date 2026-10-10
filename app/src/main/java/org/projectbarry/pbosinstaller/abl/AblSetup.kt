@@ -153,6 +153,7 @@ object AblKnown {
     val stock = listOf(
         AblScript.Known("Retroid Pocket Nova (firmware 2026-07-22)", "39615e0d5d6302a512c30c78e49c50004d331de30a3e0b07f619ff5b979e280a", null),
         AblScript.Known("KONKR Pocket FIT (firmware 2025-12-26)", "739202be4e3f781d0a5e0321c5923f05b66da694f59ae90745e0054b2cb02537", null),
+        AblScript.Known("AYN Thor (firmware 2026-02-06)", "dcb65f18445d99ede96f7d613931fa1fb1b19f30076a117c9c47df7ad967151d", null),
     )
 
     /** "rocknix: ROCKNIX 1.2" on both slots means there is nothing to install. */

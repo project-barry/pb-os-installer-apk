@@ -32,11 +32,10 @@ microSD card, right on your handheld. No computer needed.
 |---|---|
 | Retroid Pocket 6 | Yes |
 | Retroid Pocket Nova | Yes |
-| AYN Thor | Not yet |
+| AYN Thor | Yes |
 | KONKR Pocket FIT | Yes |
 
-PB-OS runs on all four, but the app still needs a device report from an AYN
-Thor before it recognises it. If you have one, see
+If yours isn't on the list, see
 [My handheld isn't recognised](#my-handheld-isnt-recognised).
 
 ## How it works

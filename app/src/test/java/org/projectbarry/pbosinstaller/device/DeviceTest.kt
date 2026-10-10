@@ -43,6 +43,11 @@ class DeviceTest {
         assertNull(Devices.find(kpf.copy(socModel = "SM8750", boardPlatform = "sun")))
     }
 
+    @Test fun thor() {
+        val thor = DeviceInfo("AYN", "qti", "AYN Thor", "kalama", "kalama", "QTI", "QCS8550", "kalama", "13")
+        assertEquals("AYN Thor", Devices.find(thor)?.name)
+    }
+
     @Test fun shortNames() {
         assertEquals(listOf("RP6", "Nova", "Thor", "KPF"), Devices.tested.map { it.shortName })
     }
