@@ -16,8 +16,19 @@ An Android app that puts [PB-OS](https://github.com/project-barry/pb-os) on a
 microSD card, right on your handheld. No computer needed.
 
 > [!WARNING]
-> This app is still being built. Right now it checks your handheld and
-> downloads PB-OS. Writing PB-OS onto the card is the next step.
+> This app is new. It has installed PB-OS from start to finish on the
+> handhelds in the list below, but expect rough edges, and keep the copy of
+> your boot loader it asks you to save.
+
+## See it in action
+
+Both videos are the whole install, from stock Android to PB-OS, sped up where
+it waits.
+
+| KONKR Pocket FIT | AYN Thor |
+|---|---|
+| [![PB-OS install on the KONKR Pocket FIT, no computer](https://img.youtube.com/vi/reaYRtysAOQ/hqdefault.jpg)](https://youtu.be/reaYRtysAOQ) | [![PB-OS install on the AYN Thor, no computer](https://img.youtube.com/vi/EbYO5bSAKnU/hqdefault.jpg)](https://youtu.be/EbYO5bSAKnU) |
+| [Watch on YouTube](https://youtu.be/reaYRtysAOQ) | [Watch on YouTube](https://youtu.be/EbYO5bSAKnU) |
 
 ## What you need
 
