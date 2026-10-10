@@ -12,8 +12,8 @@
 >
 > **Watch Project Barry on YouTube:** https://www.youtube.com/@Project-Barry
 
-An Android app that puts [PB-OS](https://github.com/project-barry/pb-os), our port of Steam OS, on a
-microSD card, right on your handheld. No computer needed.
+An Android app that puts [PB-OS](https://github.com/project-barry/pb-os), our port of Steam OS from the Steam Frame, on a
+microSD card, right on your ARM handheld (AYN Thor, Retroid Pocket 6, Retroid Pocket Nova and Konkr Pocket Fit are currently supported). No computer needed.
 
 > [!WARNING]
 > This app is new. It has installed PB-OS from start to finish on the
