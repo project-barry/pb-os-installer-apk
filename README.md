@@ -14,6 +14,8 @@
 
 An Android app that puts [PB-OS](https://github.com/project-barry/pb-os), our port of Steam OS from the Steam Frame, on a
 microSD card, right on your ARM handheld (AYN Thor, Retroid Pocket 6, Retroid Pocket Nova and Konkr Pocket Fit are currently supported). No computer needed.
+It can also install PB-OS over PB-OS or ArmadaOS on the handheld's internal storage, and repair a PB-OS
+that stopped starting.
 
 > [!WARNING]
 > This app is new. It has installed PB-OS from start to finish on the
@@ -77,6 +79,11 @@ The app asks you before each step and never moves on by itself.
    and the boot source to the SD card, then start. Android is still there:
    choose it in the same menu.
 
+**The newest update comes along.** If PB-OS has a newer update than the
+download, the app downloads it too. PB-OS installs it on its first start and
+restarts once, so you start on the newest version instead of updating right
+away.
+
 Steps 5 and 6 need full access to the handheld ("root"). On the Retroid
 Pocket 6, Retroid Pocket Nova, AYN Thor and KONKR Pocket FIT the app gets it
 by itself. If a Retroid handheld refuses, the app saves a small script and
@@ -88,6 +95,41 @@ buttons and **A** presses them.
 
 At the bottom of the app, **How Does it Work?** shows these steps in short
 ([docs/ABOUT.md](docs/ABOUT.md)), with a QR code for this page.
+
+## Already have PB-OS or ArmadaOS on internal storage?
+
+On the first screen, tap **Install Over Internal Linux**. The app checks
+internal storage (it only reads) and shows what it found: Android's size, the
+Linux space, and how PB-OS will use it.
+
+- **Android stays exactly as it is.** PB-OS goes into the space the old Linux
+  install already has; Android keeps the size you gave it.
+- **Over ArmadaOS**, that space needs at least 40.8 GB; ArmadaOS is erased,
+  games included.
+- **Over PB-OS**, you can keep your games and files (**Keep my games and
+  files**, on by default): your installed games, saves, Steam login and Decky
+  stay; the system is new, so Wi-Fi networks and system settings start fresh.
+
+Then download as usual, and tap **Install PB-OS** five times to confirm. In
+the boot menu, set the boot source to **Internal**.
+
+## Repairing PB-OS
+
+**Tools** (at the bottom of the app) → **Repair PB-OS** checks PB-OS on the
+microSD card and on internal storage. The check only reads; nothing changes
+until you pick a fix. It can:
+
+- **undo the last update**, when PB-OS stopped starting after it (PB-OS's own
+  updater puts back everything the update changed on the next start; your
+  games and files stay),
+- point PB-OS's kernel at the right place if it looks in the wrong one,
+- put the boot menu back if an Android update removed it.
+
+## Updating the app
+
+From version 0.3.0, the app tells you when a newer version is out (when you
+tap **Let's Go!**) and updates itself with **Update App**. Android asks you to
+confirm, and the first time to allow installing apps from PB-OS Installer.
 
 ## My handheld isn't recognised
 

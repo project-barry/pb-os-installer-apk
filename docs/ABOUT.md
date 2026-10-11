@@ -17,5 +17,13 @@ you before each step.
 7. To start PB-OS: hold Volume Down while you turn the handheld on. Android is
    still there, in the same menu.
 
+If PB-OS has a newer update than the download, it comes along and PB-OS
+installs it on its first start.
+
+Already have PB-OS or ArmadaOS on internal storage? **Install Over Internal
+Linux** puts PB-OS in its place without touching Android (over PB-OS you can
+keep your games). **Tools → Repair PB-OS** checks an install that stopped
+starting and offers fixes.
+
 The app is free and open source:
 [github.com/project-barry/pb-os-installer-apk](https://github.com/project-barry/pb-os-installer-apk)

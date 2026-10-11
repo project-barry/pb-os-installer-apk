@@ -22,6 +22,32 @@ object ScriptKit {
      * [ge] compares whole numbers of any size: Android's shell does 32-bit arithmetic
      * and toybox expr's comparisons go wrong on big numbers.
      */
+    /**
+     * Shell function `retarget_kernel FILE ROOT`: points the ABL's KERNEL (an
+     * Android boot image, header v0) at root=ROOT. The command line is 512 bytes at
+     * byte 64 of the header, outside the header's checksum, so nothing else changes;
+     * only root=, rootfstype= and errors= are replaced. Returns non-zero unless it
+     * reads back right.
+     */
+    val RETARGET_KERNEL = """
+retarget_kernel() {
+  [ "${'$'}(head -c 8 "${'$'}1")" = 'ANDROID!' ] && [ "${'$'}(od -A n -t u4 -j 40 -N 4 "${'$'}1" | tr -d ' ')" = 0 ] || return 1
+  rk_old=${'$'}(dd if="${'$'}1" bs=64 skip=1 count=8 2>/dev/null | tr -d '\000')
+  rk_new=
+  for t in ${'$'}rk_old; do
+    case "${'$'}t" in root=*|rootfstype=*|errors=*) ;; *) rk_new="${'$'}rk_new ${'$'}t" ;; esac
+  done
+  rk_new="${'$'}{rk_new# } root=${'$'}2 rootfstype=ext4 errors=remount-ro"
+  [ ${'$'}{#rk_new} -lt 512 ] || return 1
+  rk_tmp=/data/local/tmp/pbos-cmdline.${'$'}${'$'}
+  { printf '%s' "${'$'}rk_new"; head -c ${'$'}(expr 512 - ${'$'}{#rk_new}) /dev/zero; } > "${'$'}rk_tmp" &&
+    dd if="${'$'}rk_tmp" of="${'$'}1" bs=64 seek=1 count=8 conv=notrunc 2>/dev/null
+  rk_ok=${'$'}?
+  rm -f "${'$'}rk_tmp"
+  [ ${'$'}rk_ok = 0 ] && [ "${'$'}(dd if="${'$'}1" bs=64 skip=1 count=8 2>/dev/null | tr -d '\000')" = "${'$'}rk_new" ]
+}
+""".trim()
+
     fun prelude(name: String, id: String, statusFile: String, dryRun: Boolean = false): String {
         val run = "/data/local/tmp/pbos-$name.sh"
         val detach = if (dryRun) "on_exit() { :; }\n" else """

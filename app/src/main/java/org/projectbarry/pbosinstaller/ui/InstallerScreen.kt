@@ -78,6 +78,10 @@ import org.projectbarry.pbosinstaller.BuildConfig
 import org.projectbarry.pbosinstaller.R
 import org.projectbarry.pbosinstaller.abl.AblScript
 import org.projectbarry.pbosinstaller.device.Devices
+import org.projectbarry.pbosinstaller.internal.InternalLayout
+import org.projectbarry.pbosinstaller.internal.InternalScript
+import org.projectbarry.pbosinstaller.repair.RepairReport
+import org.projectbarry.pbosinstaller.repair.RepairScript
 import org.projectbarry.pbosinstaller.report.DeviceReport
 import org.projectbarry.pbosinstaller.report.ReportSender
 import org.projectbarry.pbosinstaller.storage.SdCard
@@ -86,10 +90,14 @@ import org.projectbarry.pbosinstaller.storage.SdCard
 fun InstallerScreen(vm: InstallerViewModel) {
     val step by vm.step.collectAsStateWithLifecycle()
     val card by vm.card.collectAsStateWithLifecycle()
+    val tools by vm.tools.collectAsStateWithLifecycle()
+    val repair by vm.repair.collectAsStateWithLifecycle()
     // Screen stays on while a root job runs, so the progress stays in view (the
     // job itself also keeps the handheld awake, see ScriptKit).
     val busy = step is Step.Writing || step is Step.CardCheck || step is Step.AblWorking ||
-        step is Step.RunScript || step is Step.AblRunScript
+        step is Step.RunScript || step is Step.AblRunScript || step is Step.InternalChecking ||
+        step is Step.InternalRunScript || step is Step.InternalWriting ||
+        repair is RepairState.Checking || repair is RepairState.Fixing || repair is RepairState.RunScript
     val view = LocalView.current
     DisposableEffect(busy) {
         view.keepScreenOn = busy
@@ -113,9 +121,12 @@ fun InstallerScreen(vm: InstallerViewModel) {
             ) {
                 // The device card (with Send Device Report) belongs to the first
                 // screens only; after Continue the step card has the page to itself.
-                val showDevice = step is Step.Card || step is Step.Untested || step is Step.WrongChip
+                val showDevice = !tools && (step is Step.Card || step is Step.Untested || step is Step.WrongChip)
                 Header()
-                if (wide && showDevice) {
+                AppUpdateBanner(vm)
+                if (tools) {
+                    ToolsCard(repair, vm, if (wide) Modifier.widthIn(max = 600.dp) else Modifier.fillMaxWidth())
+                } else if (wide && showDevice) {
                     // Side by side: tops aligned, the shorter card stretched to the taller one.
                     Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(gap)) {
                         StepCard(step, card, vm, Modifier.weight(1.4f).fillMaxHeight())
@@ -184,6 +195,14 @@ private fun Footer(vm: InstallerViewModel, gap: Dp) {
             }
             OutlinedButton(onClick = { page = "report" }, contentPadding = FooterButtonPadding, modifier = Modifier.focusRing()) {
                 Text("What's in the Report?", softWrap = false)
+            }
+            val tools by vm.tools.collectAsStateWithLifecycle()
+            OutlinedButton(
+                onClick = { if (tools) vm.closeTools() else vm.openTools() },
+                contentPadding = FooterButtonPadding,
+                modifier = Modifier.focusRing(),
+            ) {
+                Text(if (tools) "Back to Installer" else "Tools", softWrap = false)
             }
         }
     }
@@ -272,7 +291,8 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel, modifier
                     Progress(step.done, step.total)
                 }
 
-                is Step.Downloaded -> WriteStep(step, card, vm, primary)
+                is Step.Downloaded ->
+                    if (vm.target == Target.Internal) InternalInstallStep(step, vm, primary) else WriteStep(step, card, vm, primary)
 
                 is Step.RunScript -> RunAsRoot("Writing to the card", step.launcher, vm, primary)
 
@@ -302,6 +322,7 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel, modifier
                 is Step.Written -> {
                     Title("PB-OS is on your card!")
                     Body("PB-OS ${step.tag} was written to the card and checked.")
+                    FirstStartNote(step.firstUpdate, step.updateFailed)
                     Body("Next, set up the boot menu that starts PB-OS from the card.")
                     Button(onClick = vm::openBootMenu, modifier = Modifier.focusRing().focusRequester(primary)) {
                         Text("Set Up Boot Menu")
@@ -353,6 +374,59 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel, modifier
                     Body("Android is still there: choose it in the same menu.")
                 }
 
+                Step.InternalChecking -> Busy("Checking internal storage…")
+
+                is Step.InternalRunScript -> RunAsRoot(
+                    if (step.job == InternalScript.PROBE) "Checking internal storage" else "Installing PB-OS",
+                    step.launcher, vm, primary,
+                )
+
+                is Step.InternalFound -> InternalFoundStep(step.plan, vm, primary)
+
+                is Step.InternalRefused -> {
+                    Title("Can't install over internal storage")
+                    Body(step.reason)
+                    Button(onClick = vm::backToStart, modifier = Modifier.focusRing().focusRequester(primary)) { Text("Back") }
+                }
+
+                is Step.InternalWriting -> {
+                    val label = when (step.phase) {
+                        "writing" -> "Writing PB-OS to internal storage"
+                        "verifying" -> "Checking what was written"
+                        "home" -> "Copying home"
+                        "system" -> "Copying the system"
+                        else -> null
+                    }
+                    if (label != null) {
+                        Title(label)
+                        Progress(step.done, step.total)
+                    } else {
+                        Busy(
+                            when (step.phase) {
+                                "checking" -> "Checking the download and internal storage…"
+                                "boot" -> "Setting up the boot partition…"
+                                "finishing" -> "Finishing…"
+                                "table" -> "Writing the new partition table…"
+                                else -> "Starting…"
+                            }
+                        )
+                    }
+                    Body("Keep your ${vm.handheld} charged and on. You can leave the app; installing continues in the background.")
+                }
+
+                is Step.InternalDone -> {
+                    Title("PB-OS is on internal storage!")
+                    Body("PB-OS ${step.tag} was installed and checked. Android wasn't changed.")
+                    FirstStartNote(step.firstUpdate, step.updateFailed)
+                    Body("To start PB-OS:")
+                    Body(
+                        "1.  Turn your ${vm.handheld} off.\n" +
+                            "2.  Hold Volume Down while you turn it on.\n" +
+                            "3.  In the menu, set the boot source to Internal and the boot mode to Linux, then choose Start."
+                    )
+                    Body("The first start takes a little longer while PB-OS grows to fill its space. Android is still in the same menu.")
+                }
+
                 is Step.Failed -> {
                     Title("Something went wrong")
                     Body(step.message)
@@ -360,6 +434,141 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel, modifier
                 }
             }
         }
+    }
+}
+
+/** Tools: Repair PB-OS (check, report, fixes). */
+@Composable
+private fun ToolsCard(state: RepairState, vm: InstallerViewModel, modifier: Modifier = Modifier) {
+    var confirm by remember { mutableStateOf<RepairReport.Fix?>(null) }
+    confirm?.let { fix ->
+        AlertDialog(
+            onDismissRequest = { confirm = null },
+            title = { Text(fix.label) },
+            text = { Text(fix.explain) },
+            confirmButton = { Button(onClick = { confirm = null; vm.applyFix(fix) }, modifier = Modifier.focusRing()) { Text("Do It") } },
+            dismissButton = { TextButton(onClick = { confirm = null }, modifier = Modifier.focusRing()) { Text("Cancel") } },
+        )
+    }
+    Card(modifier) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            when (state) {
+                RepairState.Menu -> {
+                    Title("Tools")
+                    Text("Repair PB-OS", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Body(
+                        "For a PB-OS install on the microSD card or on internal storage that doesn't start any more, " +
+                            "for example after an update, or a boot menu that disappeared. The check only reads; " +
+                            "nothing is changed until you pick a fix."
+                    )
+                    Button(onClick = vm::checkPbOs, modifier = Modifier.focusRing()) { Text("Check PB-OS") }
+                }
+                RepairState.Checking -> Busy("Checking PB-OS…")
+                is RepairState.RunScript -> RunAsRoot(
+                    if (state.job == RepairScript.CHECK) "Checking PB-OS" else "Repairing PB-OS", state.launcher, vm, remember { FocusRequester() },
+                )
+                is RepairState.Fixing -> Busy("Repairing: ${state.fix.label}…")
+                is RepairState.Report -> RepairReportView(state.report, vm) { confirm = it }
+                is RepairState.Fixed -> {
+                    Title("Repaired")
+                    Body(state.message)
+                    Button(onClick = vm::checkPbOs, modifier = Modifier.focusRing()) { Text("Check Again") }
+                }
+                is RepairState.Failed -> {
+                    Title("Something went wrong")
+                    Body(state.message)
+                    Button(onClick = vm::checkPbOs, modifier = Modifier.focusRing()) { Text("Check Again") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RepairReportView(report: RepairReport, vm: InstallerViewModel, onFix: (RepairReport.Fix) -> Unit) {
+    Title("What the check found")
+    if (report.installs.isEmpty()) {
+        Body("No PB-OS install was found, on the microSD card or on internal storage.")
+    }
+    @Composable
+    fun Findings(list: List<RepairReport.Finding>) {
+        list.forEach { f ->
+            val (mark, color) = when (f.level) {
+                RepairReport.Level.Ok -> "✓" to MaterialTheme.colorScheme.primary
+                RepairReport.Level.Note -> "•" to MaterialTheme.colorScheme.onSurfaceVariant
+                RepairReport.Level.Problem -> "✗" to MaterialTheme.colorScheme.error
+            }
+            Row {
+                Text(mark, color = color, fontWeight = FontWeight.Bold, modifier = Modifier.widthIn(min = 24.dp))
+                Text(f.text, style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+    }
+    Text("Boot menu", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+    Findings(report.bootMenu)
+    report.installs.forEach { install ->
+        Text(install.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Findings(install.findings)
+    }
+    if (report.fixes.isEmpty()) {
+        Body(
+            if (report.installs.isNotEmpty() && report.installs.all { it.healthy } && report.bootMenu.none { it.level == RepairReport.Level.Problem })
+                "Nothing to repair was found."
+            else "The app has no fix for this yet."
+        )
+    } else {
+        Text("Fixes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        report.fixes.forEach { fix ->
+            Body(fix.explain)
+            Button(onClick = { onFix(fix) }, modifier = Modifier.focusRing()) { Text(fix.label) }
+        }
+    }
+    OutlinedButton(onClick = vm::checkPbOs, modifier = Modifier.focusRing()) { Text("Check Again") }
+}
+
+/** A newer version of this app: Update App, its progress, and Android's permission step. */
+@Composable
+private fun AppUpdateBanner(vm: InstallerViewModel) {
+    val state by vm.appUpdate.collectAsStateWithLifecycle()
+    val s = state ?: return
+    Card(Modifier.widthIn(max = 600.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            when (s) {
+                is AppUpdateState.Available -> {
+                    Text("PB-OS Installer ${s.release.version} is available (this is ${BuildConfig.VERSION_NAME}).")
+                    Button(onClick = vm::updateApp, modifier = Modifier.focusRing()) { Text("Update App") }
+                }
+                is AppUpdateState.Downloading -> {
+                    Text("Downloading PB-OS Installer ${s.release.version}…")
+                    Progress(s.done, s.total)
+                }
+                is AppUpdateState.NeedsPermission -> {
+                    Text("Android needs your OK once: allow PB-OS to install apps, then come back and tap Install.")
+                    Button(onClick = vm::updateApp, modifier = Modifier.focusRing()) { Text("Allow / Install") }
+                }
+                is AppUpdateState.Installing -> {
+                    Text("Confirm the update in Android's window. The app closes while it updates; open it again afterwards.")
+                    OutlinedButton(onClick = vm::updateApp, modifier = Modifier.focusRing()) { Text("Show it Again") }
+                }
+                is AppUpdateState.Failed -> {
+                    Text(s.message)
+                    OutlinedButton(onClick = vm::updateApp, modifier = Modifier.focusRing()) { Text("Try Again") }
+                }
+            }
+        }
+    }
+}
+
+/** What the first start of PB-OS does with the update that came along. */
+@Composable
+private fun FirstStartNote(update: String?, failed: Boolean) {
+    when {
+        update == null -> {}
+        failed -> Warning("Couldn't add update $update. Once PB-OS runs, install it from PB-OS Utils.")
+        else -> Body(
+            "On its first start, PB-OS installs update $update and restarts once. " +
+                "That start takes a few minutes longer; don't turn it off."
+        )
     }
 }
 
@@ -447,6 +656,82 @@ private fun WriteStep(step: Step.Downloaded, card: SdCard?, vm: InstallerViewMod
     ) { Text("Write to SD Card") }
 }
 
+/** What the internal check found: what goes, what stays, how big PB-OS's parts will be. */
+@Composable
+private fun InternalFoundStep(plan: InternalLayout.Plan, vm: InstallerViewModel, primary: FocusRequester) {
+    val kind = plan.kind.label
+    // Over PB-OS, keeping HOME is the default: it's the choice that loses the least.
+    val canKeep = plan.kind == InternalLayout.Kind.PbOs
+    var keep by rememberSaveable { mutableStateOf(canKeep) }
+    Title("$kind found on internal storage")
+    Body(
+        "Android: ${formatBytes(plan.androidBytes)}, stays exactly as it is.\n" +
+            "$kind: ${formatBytes(plan.linuxBytes)}, becomes PB-OS."
+    )
+    Body(
+        "PB-OS: boot ${formatBytes(plan.bootArea.length)}, system ${formatBytes(plan.storageArea.length)}, " +
+            "games and files ${formatBytes(plan.homeArea.length)}."
+    )
+    if (canKeep) {
+        Row(
+            Modifier
+                .focusRing(RoundedCornerShape(8.dp))
+                .toggleable(value = keep, role = Role.Checkbox, onValueChange = { keep = it })
+                .padding(end = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Checkbox(checked = keep, onCheckedChange = null)
+            Spacer(Modifier.size(12.dp))
+            Text("Keep my games and files (HOME)")
+        }
+    }
+    if (keep) {
+        Body(
+            "Kept: installed games, saves, your Steam login and settings, Decky and its plugins. " +
+                "New: the system, so Wi-Fi networks, your password and system settings start fresh."
+        )
+    } else {
+        Warning(
+            "Installing ERASES the $kind install on internal storage, with its games, saves and settings. " +
+                "Copy anything you want to keep first."
+        )
+    }
+    Button(onClick = { vm.continueInternal(keep) }, modifier = Modifier.focusRing().focusRequester(primary)) { Text("Continue") }
+    OutlinedButton(onClick = vm::backToStart, modifier = Modifier.focusRing()) { Text("Back") }
+}
+
+/** Downloaded, installing over internal storage: the last check, confirmed with 5 taps. */
+@Composable
+private fun InternalInstallStep(step: Step.Downloaded, vm: InstallerViewModel, primary: FocusRequester) {
+    var taps by rememberSaveable { mutableStateOf(0) }
+    val plan = vm.internalPlan
+    val kind = plan?.kind?.label ?: "Linux"
+    Title("PB-OS ${step.image.tag} is ready")
+    Body("It's downloaded and checked. Next, install it over $kind on internal storage.")
+    Warning(
+        if (vm.keepHome) {
+            "This replaces the PB-OS system. HOME (${plan?.let { formatBytes(it.homeArea.length) }}) with your games " +
+                "and files stays. Android and its apps aren't touched."
+        } else {
+            "This ERASES the $kind install" + (plan?.let { " (${formatBytes(it.linuxBytes)})" } ?: "") +
+                ", with its games, saves and settings. Android and its apps aren't touched."
+        }
+    )
+    Button(
+        onClick = { taps += 1; if (taps >= 5) { taps = 0; vm.prepareInternalInstall() } },
+        enabled = plan != null,
+        modifier = Modifier.focusRing().focusRequester(primary),
+    ) {
+        Text(
+            when (val left = 5 - taps) {
+                5 -> "Install PB-OS (tap 5 times)"
+                1 -> "Tap 1 more time"
+                else -> "Tap $left more times"
+            }
+        )
+    }
+}
+
 /** Insert a card, then Continue: the app never moves on by itself when a card goes in. */
 @Composable
 private fun CardStep(card: SdCard?, vm: InstallerViewModel, primary: FocusRequester) {
@@ -465,6 +750,9 @@ private fun CardStep(card: SdCard?, vm: InstallerViewModel, primary: FocusReques
         enabled = card != null && card.bigEnough,
         modifier = Modifier.focusRing().focusRequester(primary),
     ) { Text("Continue") }
+    HorizontalDivider(Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant)
+    Body("Already have PB-OS or ArmadaOS on internal storage? PB-OS can go over it, in the same space, without a card.")
+    OutlinedButton(onClick = vm::checkInternal, modifier = Modifier.focusRing()) { Text("Install Over Internal Linux") }
 }
 
 @Composable
@@ -483,13 +771,27 @@ private fun OfferStep(step: Step.Offer, card: SdCard?, vm: InstallerViewModel, p
                 step.needed == 0L -> ", already downloaded"
                 step.needed < image.downloadSize -> ", ${formatBytes(step.needed)} still to fetch"
                 else -> ""
-            }
+            } +
+            (step.update?.let { "\nUpdate: ${it.tag} (${formatBytes(it.downloadSize)}), installed on the first start" } ?: "")
     )
+    if (step.updateUnknown) {
+        Body("Couldn't check for a newer PB-OS update. PB-OS can update itself after it starts.")
+    }
+    val internal = vm.target == Target.Internal
+    val kind = vm.internalPlan?.kind?.label ?: "Linux"
     Warning(
-        "Installing PB-OS ERASES EVERYTHING on the microSD card" +
-            (listOfNotNull(card?.label, card?.sizeBytes?.let(::formatBytes))
-                .takeIf { it.isNotEmpty() }?.joinToString(", ", " (", ")") ?: "") +
-            ". Copy anything you want to keep off the card first."
+        if (internal && vm.keepHome) {
+            "Installing PB-OS replaces the PB-OS system on internal storage. Your games and files in HOME stay; " +
+                "Wi-Fi networks and system settings start fresh. Android isn't touched."
+        } else if (internal) {
+            "Installing PB-OS ERASES the $kind install on internal storage, with its games, saves and settings. " +
+                "Android isn't touched."
+        } else {
+            "Installing PB-OS ERASES EVERYTHING on the microSD card" +
+                (listOfNotNull(card?.label, card?.sizeBytes?.let(::formatBytes))
+                    .takeIf { it.isNotEmpty() }?.joinToString(", ", " (", ")") ?: "") +
+                ". Copy anything you want to keep off the card first."
+        }
     )
     Row(
         Modifier
@@ -501,7 +803,13 @@ private fun OfferStep(step: Step.Offer, card: SdCard?, vm: InstallerViewModel, p
     ) {
         Checkbox(checked = understood, onCheckedChange = null)
         Spacer(Modifier.size(12.dp))
-        Text("I understand the card will be erased")
+        Text(
+            when {
+                internal && vm.keepHome -> "I understand the PB-OS system will be replaced"
+                internal -> "I understand $kind will be erased"
+                else -> "I understand the card will be erased"
+            }
+        )
     }
     Button(onClick = { vm.download(image) }, enabled = understood, modifier = Modifier.focusRing()) {
         Text("Download PB-OS")

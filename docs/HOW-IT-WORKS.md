@@ -134,7 +134,136 @@ warning. Builds handed out to people keep it off.
 The unit tests check the real alpha-v0.5.2 `SHA256SUMS` and signature, a
 tampered copy, another key and another namespace.
 
-## 6. Device reports
+### The newest update comes along
+
+[release/Updates.kt](../app/src/main/java/org/projectbarry/pbosinstaller/release/Updates.kt),
+[root/FirstUpdate.kt](../app/src/main/java/org/projectbarry/pbosinstaller/root/FirstUpdate.kt)
+
+- With the image, the app looks up the newest patch for it: releases of
+  `pb-os-updates`, then `pb-os` (a tag's first copy wins; drafts and
+  `pb-os-dev` never), newer than the image's tag, with
+  `pb-os-<tag>-<image>.from-<image tag>.delta.tar.gz.NNN` (unbroken) plus
+  `SHA256SUMS` and `SHA256SUMS.sig`.
+- Patches are cumulative deltas from their feature release, and the feature
+  release's own updater installs one from `~/Downloads` (it accepts any signed
+  delta built from its version), so only the newest is needed. Bridge releases
+  such as alpha-v0.5.2.3 are for updaters looking online. Checked: the
+  alpha-v0.5.2 updater's `validate_archive` accepts the alpha-v0.5.2.10 delta.
+- It downloads into `files/updates/`, checks the signature and the joined
+  package's hash, and keeps `SHA256SUMS(.sig)` as published.
+- After writing (card or internal), the root job mounts the new system and
+  home (card: MBR partitions 2 and 3 through loop devices) and puts the parts
+  and `SHA256SUMS(.sig)` into `/home/steamos/Downloads` (uid 1000), plus
+  `pbos-first-update.service` in both `/etc` layers and
+  `/home/.pbos-installer/first-update.sh`. On the first start, after
+  expand-home and growfs and before the display manager, it runs
+  `konkr-update.py local-update` and restarts into the updater's install
+  screen. The script moves itself away first, so it runs once; the log is
+  `/home/.pbos-installer/first-update.log`.
+- Never fails the install: lookup or placing problems only mean PB-OS starts
+  on the image's version (`first_update=failed` in the status, shown on the
+  last screen).
+
+### The app updates itself
+
+[update/AppUpdate.kt](../app/src/main/java/org/projectbarry/pbosinstaller/update/AppUpdate.kt)
+
+- On the Let's Go! tap (the app's first time online) it also reads this repo's
+  latest release: tag `vX.Y.Z` newer than its own version, with
+  `pb-os-installer-vX.Y.Z.apk` and `SHA256SUMS`. A banner offers **Update App**.
+- Update App downloads the APK, checks its checksum, and checks it is this
+  package, a higher versionCode and signed with the installed app's key (a
+  debug build gets a clear message instead of Android's failure). Then it hands
+  it to Android's `PackageInstaller`: the first time, Android asks to allow
+  installs from PB-OS (the banner opens that page), then Android shows its own
+  "Do you want to update this app?". Android replaces the app and closes it.
+- Tested on the emulator with a local fake release (0.2.1 → 0.2.2, same debug
+  key): banner, download, permission page, Android's prompt, 0.2.2 installed.
+  Versions up to 0.2.1 can't do this, so the first self-update is from the
+  release that ships it.
+
+## 6. Installing over Linux on internal storage
+
+[internal/](../app/src/main/java/org/projectbarry/pbosinstaller/internal/)
+**Not yet tried on a handheld's own storage.**
+
+For people who already run PB-OS or ArmadaOS from internal storage: PB-OS goes
+over it in the space it already has, without a card. Android's partitions,
+userdata included, are never written, so Android keeps the size it was given.
+
+```
+Card ──[Install Over Internal Linux]──▶ InternalChecking ─▶ InternalFound ──[Continue]──▶ Ready … Downloaded
+                                                       └─▶ InternalRefused ──[Back]──▶ Card
+Downloaded ──[Install PB-OS ×5]──▶ InternalWriting ─▶ InternalDone
+```
+
+- **Check** (root, reads only): finds the disk userdata is on
+  (`/dev/block/by-name/userdata`, then its parent in `/sys/class/block`) and
+  saves its first and last MiB plus the kernel's partitions (in use or not).
+  The app reads the GPT itself ([Gpt.kt](../app/src/main/java/org/projectbarry/pbosinstaller/internal/Gpt.kt)):
+  both copies must be intact and agree.
+- **What it accepts** ([InternalLayout.kt](../app/src/main/java/org/projectbarry/pbosinstaller/internal/InternalLayout.kt)):
+  after userdata exactly `ROCKNIX, STORAGE, HOME` (PB-OS) or
+  `ARMADA, ARMADA_BOOT, ARMADA_ROOT` (ArmadaOS); nameless leftovers inside
+  userdata (UNINSTALL CFW) are ignored, anything else is refused.
+  - PB-OS: the same partitions, the table isn't written. Needs ROCKNIX ≥
+    256 MiB, STORAGE ≥ 18 GiB, HOME ≥ 16 GiB.
+  - ArmadaOS: its space becomes ROCKNIX 2 GiB, STORAGE 20 GiB, HOME the rest,
+    in the same table slots, never past Armada's end.
+  - **Space check:** the Linux space must be at least 38 GiB (2 + 20 + 16),
+    and the image must fit STORAGE (checked again by the script).
+- **Seen on the Nova (Android 13):** toybox `tr -d '\000'`, 64-bit `expr`,
+  `losetup -r -o -S`, `dd conv=notrunc`, ext4 (64bit, metadata_csum) mounted
+  read-write and vfat with 4 KiB sectors on a 512-byte loop all work.
+- **Install** ([InternalScript.kt](../app/src/main/java/org/projectbarry/pbosinstaller/internal/InternalScript.kt)):
+  everything goes through loop devices over the disk at the planned byte
+  ranges, because the kernel keeps Android's view of the partitions until the
+  next boot.
+  1. Checks first: same disk, table byte-for-byte as the app read it, nothing
+     in the Linux space mounted or held, download and table files intact.
+  2. The image is unpacked into STORAGE and read back against the signed
+     checksum. From here on the old install is gone.
+  3. ROCKNIX: FAT32 in the disk's sector size (the image's 512-byte FAT can't
+     be mounted on 4K UFS), made by the image's own `mkfs.fat` run through its
+     glibc loader from the image's system mounted read-only. Android's
+     `newfs_msdos` can't: it always takes the loop device's 512-byte sectors
+     (seen on the Nova). Then the image's boot files, the
+     KERNEL's command line changed to `root=PARTLABEL=STORAGE` (the
+     command line is outside the boot image's checksum).
+  4. Home into HOME (skipped when an existing PB-OS HOME is kept), then the
+     system to the start of STORAGE. That copy always
+     moves to a lower address, so nothing is overwritten before it's read.
+     Each copy is checked against its source.
+  5. fstab mounts by partition name (a PB-OS card may be in too, with the same
+     filesystem IDs); `x-systemd.growfs` and expand-home grow both filesystems
+     on the first boot.
+  6. ArmadaOS only: the new table, backup copy first and primary header last,
+     read back.
+- **Keep HOME** (PB-OS over PB-OS only, on by default): HOME isn't written at
+  all; the script first checks it's ext4 that mounts with `/steamos` in it.
+  Games, saves, the Steam login and Decky stay; the system (`/etc`, `/var`:
+  Wi-Fi, password, ssh, Tailscale) is new. Bundled Decky plugins stay at their
+  old versions until the next update.
+- The 5-tap button follows the boot loader backup's rule. The ABL isn't
+  touched: an internal Linux install already has the ROCKNIX boot menu.
+
+### Dry run on a handheld
+
+`InternalDryRunTest` writes `app/build/internal-dry-run/`: a 60 GiB fake disk
+with Android and ArmadaOS (`disk-head.bin`, `disk-tail.bin`), the new table
+files and `install.sh`, which installs into `/data/local/tmp/pbos-dry/disk.img`
+instead of internal storage. On the handheld, as root:
+
+```sh
+D=/data/local/tmp/pbos-dry
+truncate -s 64424509440 $D/disk.img          # sparse; needs ~20 GB free
+dd if=$D/disk-head.bin of=$D/disk.img conv=notrunc
+dd if=$D/disk-tail.bin of=$D/disk.img bs=1048576 seek=61439 conv=notrunc
+sed -i "s|SEVENZIP_PATH|<app lib dir>/lib7zzs.so|; s|IMAGE_DIR|<folder with the parts>|" $D/install.sh
+sh $D/install.sh; cat $D/status
+```
+
+## 7. Device reports
 
 [report/DeviceReport.kt](../app/src/main/java/org/projectbarry/pbosinstaller/report/DeviceReport.kt),
 [report/ReportSender.kt](../app/src/main/java/org/projectbarry/pbosinstaller/report/ReportSender.kt),

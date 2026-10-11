@@ -54,28 +54,38 @@ for s in a b; do
 done
 """
 
-    fun backupBody(job: BackupJob): String {
-        val stock = job.stock.joinToString("\n") { "    ${q(it.sha256)}) echo ${q("stock: " + it.label)};;" }
-        val rocknix = job.rocknix.joinToString("\n") {
+    /**
+     * Shell functions: `identify FILE` prints what a boot loader image is ("stock:
+     * <label>", "rocknix: <label>" or "unknown"). Needs ScriptKit's sha.
+     */
+    fun identifyFunctions(stock: List<Known>, rocknix: List<Known>): String {
+        val stockCases = stock.joinToString("\n") { "    ${q(it.sha256)}) echo ${q("stock: " + it.label)};;" }
+        val rocknixChecks = rocknix.joinToString("\n") {
             "  [ \"\$(head -c ${it.bytes} \"\$1\" | sha)\" = ${q(it.sha256)} ] && { echo ${q("rocknix: " + it.label)}; return; }"
         }
+        return """
+# What a boot loader image is: a known stock one, a ROCKNIX version, or unknown.
+identify() {
+  case "${'$'}(sha "${'$'}1")" in
+$stockCases
+    *) identify_rocknix "${'$'}1";;
+  esac
+}
+identify_rocknix() {
+$rocknixChecks
+  echo unknown
+}
+""".trim()
+    }
+
+    fun backupBody(job: BackupJob): String {
         val info = job.info.joinToString("\n") { "  echo ${q(it)}" }
         return """
 ${ScriptKit.prelude(BACKUP, job.id, job.statusFile)}
 # Backs up the boot loader (both ABL slots) and says what each slot holds.
 DIR=${q(job.backupDir)}
 ${checks(job.platform)}
-# What a boot loader image is: a known stock one, a ROCKNIX version, or unknown.
-identify() {
-  case "${'$'}(sha "${'$'}1")" in
-$stock
-    *) identify_rocknix "${'$'}1";;
-  esac
-}
-identify_rocknix() {
-$rocknix
-  echo unknown
-}
+${identifyFunctions(job.stock, job.rocknix)}
 
 status backing-up
 mkdir -p "${'$'}DIR" && give "${'$'}DIR"

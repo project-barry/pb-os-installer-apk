@@ -1,5 +1,6 @@
 package org.projectbarry.pbosinstaller.writer
 
+import org.projectbarry.pbosinstaller.root.FirstUpdate
 import org.projectbarry.pbosinstaller.root.ScriptKit
 
 /**
@@ -21,6 +22,8 @@ object WriteScript {
         val statusFile: String,
         /** Test only: write here instead of the card, and skip unmounting it. */
         val dryRunTarget: String? = null,
+        /** The newest patch, installed by PB-OS on its first start ([FirstUpdate]). */
+        val firstUpdate: FirstUpdate.Files? = null,
     )
 
     /** Status file states, in order. */
@@ -89,6 +92,7 @@ IMAGE_BYTES=${'$'}("${'$'}SEVENZIP" l -slt "${'$'}PART1" 2>/dev/null | sed -n '/
 [ -n "${'$'}IMAGE_BYTES" ] || fail "The downloaded image can't be opened. Download PB-OS again."
 ge "${'$'}SIZE" "${'$'}IMAGE_BYTES" || fail "The card is too small for PB-OS."
 $partChecks
+${job.firstUpdate?.files.orEmpty().joinToString("\n") { (path, sha) -> "check_part ${q(path)} ${q(sha)}" }}
 
 if [ -z "${'$'}DRY_RUN_TARGET" ]; then
   TARGET=/dev/block/${'$'}DEV
@@ -164,8 +168,44 @@ if [ -z "${'$'}DRY_RUN_TARGET" ]; then
   # and change them. The handheld picks the new partitions up on the next boot.
 fi
 
+${firstUpdateBlock(job)}
 status done "${'$'}IMAGE_BYTES" "${'$'}IMAGE_BYTES"
 """.trimStart()
+    }
+
+    /**
+     * Mounts the card's system and home (partitions 2 and 3 of the image's MBR,
+     * through loop devices: the kernel still has the card's old partitions) and
+     * puts the update in. Never fails the job; the outcome goes in first_update=.
+     */
+    private fun firstUpdateBlock(job: Job): String {
+        val update = job.firstUpdate ?: return ""
+        if (job.dryRunTarget != null) return ""
+        return FirstUpdate.block(update) + "\n" + """
+first_update() {
+  b() { od -A n -t x1 -j "${'$'}1" -N 1 "${'$'}TARGET" | tr -d ' '; }
+  w() { od -A n -t u4 -j "${'$'}1" -N 4 "${'$'}TARGET" | tr -d ' '; }
+  [ "${'$'}(b 466)${'$'}(b 482)" = 8383 ] || return 1
+  L2=${'$'}(losetup -f -s -o ${'$'}(expr "${'$'}(w 470)" '*' 512) -S ${'$'}(expr "${'$'}(w 474)" '*' 512) "${'$'}TARGET") || return 1
+  L3=${'$'}(losetup -f -s -o ${'$'}(expr "${'$'}(w 486)" '*' 512) -S ${'$'}(expr "${'$'}(w 490)" '*' 512) "${'$'}TARGET") || { losetup -d "${'$'}L2"; return 1; }
+  M=/data/local/tmp/pbos-first-update
+  mkdir -p "${'$'}M/root" "${'$'}M/home"
+  OK=1
+  if mount -t ext4 -o rw,noatime "${'$'}L2" "${'$'}M/root"; then
+    if mount -t ext4 -o rw,noatime "${'$'}L3" "${'$'}M/home"; then
+      place_update "${'$'}M/root" "${'$'}M/home" || OK=0
+      umount "${'$'}M/home"
+    else OK=0; fi
+    umount "${'$'}M/root"
+  else OK=0; fi
+  losetup -d "${'$'}L3" 2>/dev/null; losetup -d "${'$'}L2" 2>/dev/null
+  rmdir "${'$'}M/root" "${'$'}M/home" "${'$'}M" 2>/dev/null
+  [ "${'$'}OK" = 1 ]
+}
+if first_update; then U="first_update=placed"; else U="first_update=failed"; fi
+EXTRA="${'$'}{EXTRA:+${'$'}EXTRA
+}${'$'}U"
+""".replace("${'$'}", "${'$'}")
     }
 
     fun quote(s: String): String = ScriptKit.quote(s)

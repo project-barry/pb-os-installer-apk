@@ -1,7 +1,9 @@
 package org.projectbarry.pbosinstaller.writer
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.projectbarry.pbosinstaller.root.FirstUpdate
 import org.junit.Test
 import java.io.File
 
@@ -25,6 +27,21 @@ class WriteScriptTest {
         val p = ProcessBuilder("/bin/sh", "-n", f.path).redirectErrorStream(true).start()
         val out = p.inputStream.bufferedReader().readText()
         assertEquals(out, 0, p.waitFor())
+    }
+
+    @Test fun firstUpdateGoesOnTheCardAfterTheCheck() {
+        val update = FirstUpdate.Files("alpha-v0.5.2.10", listOf("/u/d.001" to "f".repeat(64), "/u/SHA256SUMS" to "9".repeat(64)))
+        val body = WriteScript.body(job.copy(firstUpdate = update))
+        val f = File.createTempFile("pbos-write-up", ".sh")
+        f.writeText(body)
+        val p = ProcessBuilder("/bin/sh", "-n", f.path).redirectErrorStream(true).start()
+        assertEquals(p.inputStream.bufferedReader().readText(), 0, p.waitFor())
+        assertTrue(body.indexOf("check_part '/u/d.001'") in 0 until body.indexOf("status writing"))
+        assertTrue(body.indexOf("first_update()") > body.indexOf("didn't read back correctly"))
+        assertTrue(body.indexOf("first_update()") < body.indexOf("status done"))
+        assertTrue("[ \"${'$'}(b 466)${'$'}(b 482)\" = 8383 ]" in body) // partitions 2 and 3 are Linux
+        assertFalse("@" in body.substringAfter("first_update() {").substringBefore("status done"))
+        assertFalse("first_update" in WriteScript.body(job.copy(firstUpdate = update, dryRunTarget = "/tmp/x")))
     }
 
     @Test fun bodyHasEveryCheck() {
