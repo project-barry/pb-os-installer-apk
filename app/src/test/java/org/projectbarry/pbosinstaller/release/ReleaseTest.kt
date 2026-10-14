@@ -45,6 +45,21 @@ class ReleaseTest {
         assertEquals("pocketfit", Releases.pickImage(r, listOf("pb-os", "pocketfit"))?.image)
     }
 
+    @Test fun everyTestedDeviceFindsTheOneImage() {
+        // alpha v0.5.3's assets: one image, "pb-os", for every device.
+        val r = release(
+            "alpha-v0.5.3", "SHA256SUMS", "SHA256SUMS.sig", "release_notes.md",
+            "pb-os-alpha-v0.5.3-pb-os.img.7z.001", "pb-os-alpha-v0.5.3-pb-os.img.7z.002",
+            "pb-os-alpha-v0.5.3-pb-os.img.7z.003",
+        )
+        for (d in org.projectbarry.pbosinstaller.device.Devices.tested) {
+            assertEquals(d.name, "pb-os", Releases.pickImage(r, d.images)?.image)
+        }
+        for (images in org.projectbarry.pbosinstaller.device.Devices.imagesBySoc.values) {
+            assertEquals("pb-os", Releases.pickImage(r, images)?.image)
+        }
+    }
+
     @Test fun parsesRealSums() {
         val sums = Releases.parseSums(String(resource("SHA256SUMS")))
         assertEquals(
