@@ -112,11 +112,16 @@ class InternalScriptTest {
         assertTrue("trap 'unmount_all; restore_vm; clean_work; on_exit' EXIT" in body)
     }
 
-    @Test fun keptHomeIsCheckedAndNeverWritten() {
+    @Test fun keptHomeIsCheckedAndOnlyGetsTheAndroidFiles() {
         val body = InternalScript.installBody(job.copy(table = emptyList(), keepHome = true))
         assertValidShell(body)
         assertFalse("Copying home failed" in body)
-        assertFalse(Regex("loop DST \\${'$'}HM_OFF").containsMatchIn(body)) // HOME never opened for writing
+        assertFalse(Regex("loop DST \\${'$'}HM_OFF").containsMatchIn(body)) // HOME is never overwritten whole
+        // Only the Android apps payload, from the image's home, before the system copy overwrites the image.
+        assertTrue("KA=steamos/.local/share/konkr-android" in body)
+        assertTrue("rm -rf \"${'$'}WORK/home/${'$'}KA\" && cp -a \"${'$'}WORK/imghome/${'$'}KA\"" in body)
+        assertTrue(body.indexOf("loop IMG_HOME") in 0 until body.indexOf("Copying the system failed"))
+        assertFalse(Regex("rm -rf \"\\${'$'}WORK/home\"").containsMatchIn(body))
         assertTrue("loop HOME_CHECK ${'$'}HM_OFF ${'$'}HM_LEN ro" in body)
         // Checked before the first write.
         assertTrue(body.indexOf("isn't a PB-OS home") in 0 until body.indexOf("loop STAGE"))

@@ -306,7 +306,7 @@ printf '%s\n' "PB-OS on internal storage, installed by the PB-OS Installer app."
 sync
 unmount_all
 
-${if (job.keepHome) "# HOME stays as it is." else homeCopy}
+${if (job.keepHome) keptHomeAndroid else homeCopy}
 
 # The system moves from inside the image to the start of STORAGE: every byte is read
 # before anything is written over it.
@@ -349,6 +349,29 @@ T=${'$'}(expr ${'$'}P3_LEN '*' 2)
 copy_to "${'$'}SRC" ${'$'}P3_LEN "${'$'}DST" home 0 ${'$'}T || fail "Copying home failed. Try again."
 A=${'$'}(sha_of "${'$'}SRC" ${'$'}P3_LEN home ${'$'}P3_LEN ${'$'}T) && [ -n "${'$'}A" ] || fail "Checking home failed. Try again."
 [ "${'$'}(sha_of "${'$'}DST" ${'$'}P3_LEN home ${'$'}P3_LEN ${'$'}T)" = "${'$'}A" ] || fail "Home didn't read back correctly. Try again."
+unmount_all
+""".trim()
+
+    /**
+     * HOME stays as it is, except one folder: from PB-OS alpha v0.5.4 on, the
+     * Android apps payload (Play Store, framework fixes) is in the image's home,
+     * not its system, so a kept HOME takes it from the image (replacing an older
+     * copy). Before the system copy, which overwrites the image in STORAGE.
+     */
+    private val keptHomeAndroid = """
+# HOME stays as it is, except the Android apps payload, which comes from the image's home.
+KA=steamos/.local/share/konkr-android
+loop IMG_HOME ${'$'}(expr ${'$'}ST_OFF + ${'$'}P3_OFF) ${'$'}P3_LEN ro && mnt "${'$'}IMG_HOME" "${'$'}WORK/imghome" ro,noload ext4 ||
+  fail "Couldn't open the image's home."
+if [ -d "${'$'}WORK/imghome/${'$'}KA" ]; then
+  loop HOME_KA ${'$'}HM_OFF ${'$'}HM_LEN && mnt "${'$'}HOME_KA" "${'$'}WORK/home" rw,noatime ext4 || fail "Couldn't open HOME."
+  for d in steamos/.local steamos/.local/share; do
+    [ -d "${'$'}WORK/home/${'$'}d" ] || { mkdir "${'$'}WORK/home/${'$'}d" && chown 1000:1000 "${'$'}WORK/home/${'$'}d"; } || fail "Couldn't prepare HOME."
+  done
+  rm -rf "${'$'}WORK/home/${'$'}KA" && cp -a "${'$'}WORK/imghome/${'$'}KA" "${'$'}WORK/home/${'$'}KA" &&
+    chown -R 1000:1000 "${'$'}WORK/home/${'$'}KA" || fail "Couldn't copy the Android apps files to HOME."
+fi
+sync
 unmount_all
 """.trim()
 
