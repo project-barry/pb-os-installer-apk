@@ -13,7 +13,7 @@
 > **Watch Project Barry on YouTube:** https://www.youtube.com/@Project-Barry
 
 An Android app that puts [PB-OS](https://github.com/project-barry/pb-os), our port of Steam OS from the Steam Frame, on a
-microSD card, right on your ARM handheld (AYN Thor, Retroid Pocket 6, Retroid Pocket Nova and Konkr Pocket Fit are currently supported). No computer needed.
+microSD card, right on your ARM handheld (AYN Thor, Retroid Pocket 6, Retroid Pocket Nova and Konkr Pocket Fit are currently supported; the AYN Odin 2, Odin 2 Portal and Odin 2 Mini are supported but not tested yet). No computer needed.
 It can also install PB-OS over PB-OS or ArmadaOS on the handheld's internal storage, and repair a PB-OS
 that stopped starting.
 
@@ -34,7 +34,7 @@ it waits.
 
 ## What you need
 
-- A handheld PB-OS has been tested on (see the list below).
+- A handheld PB-OS supports (see the list below).
 - A microSD card of 32 GB or bigger. **Everything on the card will be
   erased.** Copy off anything you want to keep first.
 - Wi-Fi, and about 5 GB of free space on the handheld for the download.
@@ -47,6 +47,9 @@ it waits.
 | Retroid Pocket Nova | Yes |
 | AYN Thor | Yes |
 | KONKR Pocket FIT | Yes |
+| AYN Odin 2 | Yes, but PB-OS hasn't been tested on one yet |
+| AYN Odin 2 Portal | Yes, but PB-OS hasn't been tested on one yet |
+| AYN Odin 2 Mini | Yes, but PB-OS hasn't been tested on one yet |
 
 If yours isn't on the list, see
 [My handheld isn't recognised](#my-handheld-isnt-recognised).

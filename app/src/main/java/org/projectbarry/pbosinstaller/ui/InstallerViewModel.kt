@@ -12,7 +12,7 @@ import kotlinx.coroutines.withContext
 import org.projectbarry.pbosinstaller.BuildConfig
 import org.projectbarry.pbosinstaller.device.DeviceInfo
 import org.projectbarry.pbosinstaller.device.Devices
-import org.projectbarry.pbosinstaller.device.TestedDevice
+import org.projectbarry.pbosinstaller.device.SupportedDevice
 import org.projectbarry.pbosinstaller.release.ImageDownloader
 import org.projectbarry.pbosinstaller.release.ImageRelease
 import org.projectbarry.pbosinstaller.release.Releases
@@ -129,7 +129,7 @@ enum class Target { Card, Internal }
 
 class InstallerViewModel(app: Application) : AndroidViewModel(app) {
     val info: DeviceInfo = DeviceInfo.read()
-    val tested: TestedDevice? = Devices.find(info)
+    val tested: SupportedDevice? = Devices.find(info)
     /** Full name with maker, e.g. "Retroid Pocket Nova" (Android's maker and model if untested). */
     val fullName: String = tested?.name ?: "${info.manufacturer} ${info.model}"
     /** Short name for a tested handheld ("Nova"), or "handheld" if unknown. */

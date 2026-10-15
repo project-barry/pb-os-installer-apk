@@ -48,6 +48,16 @@ class DeviceTest {
         assertEquals("AYN Thor", Devices.find(thor)?.name)
     }
 
+    @Test fun odin2FamilyIsSupportedNotTested() {
+        // Android's maker/model on stock: AYN / Odin2, Odin2 Portal, Odin2 Mini (kalama).
+        for ((model, name) in listOf("Odin2" to "AYN Odin 2", "Odin2 Portal" to "AYN Odin 2 Portal", "Odin2 Mini" to "AYN Odin 2 Mini")) {
+            val d = Devices.find(DeviceInfo("AYN", "qti", model, "kalama", "kalama", "QTI", "QCS8550", "kalama", "13"))
+            assertEquals(name, d?.name)
+            assertEquals(false, d?.hardwareTested)
+        }
+        assertNull(Devices.find(info("AYN", "Odin2", "SM8650")))
+    }
+
     @Test fun shortNames() {
         assertEquals(listOf("RP6", "Nova", "Thor", "KPF"), Devices.tested.map { it.shortName })
     }

@@ -255,7 +255,14 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel, modifier
                     if (vm.tested == null) {
                         Warning("UNTESTED DEVICE: this build allows installing on handhelds PB-OS was never tested on.")
                     }
-                    if (vm.tested != null) Body("PB-OS has been tested on the ${vm.fullName}.")
+                    when {
+                        vm.tested == null -> {}
+                        vm.tested.hardwareTested -> Body("PB-OS has been tested on the ${vm.fullName}.")
+                        else -> {
+                            Warning("NOT TESTED YET: PB-OS has support for the ${vm.fullName}, but nobody has run it on one yet.")
+                            Body("Expect problems, and please tell us on Discord how it goes.")
+                        }
+                    }
                     Body("Tap the button below to get started.")
                     Button(onClick = vm::lookUpRelease, modifier = Modifier.focusRing().focusRequester(primary)) {
                         Text("Let's Go!")
@@ -763,6 +770,8 @@ private fun OfferStep(step: Step.Offer, card: SdCard?, vm: InstallerViewModel, p
     Title(image.title.substringBefore(':').trim())
     if (vm.tested == null) {
         Warning("UNTESTED DEVICE: this build allows installing on handhelds PB-OS was never tested on.")
+    } else if (!vm.tested.hardwareTested) {
+        Warning("NOT TESTED YET: nobody has run PB-OS on the ${vm.tested.name} yet.")
     }
     Body(
         "Device: ${vm.tested?.name ?: "${vm.info.manufacturer} ${vm.info.model}"}\n" +
@@ -853,7 +862,11 @@ private fun DeviceCard(vm: InstallerViewModel, modifier: Modifier = Modifier) {
             Text(
                 listOfNotNull(
                     vm.info.soc?.label ?: "Unsupported chip",
-                    if (vm.tested != null) "tested with PB-OS" else "not tested with PB-OS",
+                    when {
+                        vm.tested == null -> "not tested with PB-OS"
+                        vm.tested.hardwareTested -> "tested with PB-OS"
+                        else -> "supported, not tested yet"
+                    },
                 ).joinToString(" · "),
                 style = MaterialTheme.typography.bodyMedium,
             )

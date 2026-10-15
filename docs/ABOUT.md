@@ -5,8 +5,8 @@ you before each step.
 
 1. Checks that your handheld has a chip PB-OS supports (Snapdragon 8 Gen 2 or
    8 Gen 3).
-2. Checks your microSD card (32 GB or bigger) and that PB-OS has been tested
-   on your handheld.
+2. Checks your microSD card (32 GB or bigger) and that PB-OS supports your
+   handheld.
 3. Finds the newest PB-OS release on GitHub.
 4. Downloads it and checks that it's complete and really comes from the PB-OS
    team.

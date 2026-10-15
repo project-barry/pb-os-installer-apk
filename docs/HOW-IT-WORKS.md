@@ -86,6 +86,14 @@ entry (case ignored) **and** its chip matches the entry's chip.
 | Retroid Pocket Nova | SM8550 | `Moorechip` / `Retroid Pocket Nova` | `sm8550` |
 | AYN Thor | SM8550 | `AYN` / `AYN Thor` | `sm8550` |
 | KONKR Pocket FIT | SM8650 | `AYANEO` / `Pocket FIT` | `pocketfit` |
+| AYN Odin 2 \* | SM8550 | `AYN` / `Odin2` | `pb-os` |
+| AYN Odin 2 Portal \* | SM8550 | `AYN` / `Odin2 Portal` | `pb-os` |
+| AYN Odin 2 Mini \* | SM8550 | `AYN` / `Odin2 Mini` | `pb-os` |
+
+\* Supported but never run on one (`hardwareTested = false`): the app installs
+PB-OS and warns that it is untested. Their strings come from the stock
+firmware (odm/vendor `build.prop`; `ro.product.property_source_order` puts
+odm first), not from a device report.
 
 The strings come from `getprop` on each handheld's stock Android (13 on the
 RP6, Nova and Thor, 14 on the Pocket FIT). A future entry can use the
