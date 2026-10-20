@@ -12,10 +12,12 @@ you before each step.
    team.
 5. Writes it to the microSD card, erasing what's on it, and reads it back to
    check every byte.
-6. Sets up the boot menu (ROCKNIX ABL, by the ROCKNIX team) so your handheld
-   can start PB-OS from the card, after saving a copy of the original.
-7. To start PB-OS: hold Volume Down while you turn the handheld on. Android is
-   still there, in the same menu.
+6. Sets up the boot menu (OpenABL, by the Open Handheld Collective) so your
+   handheld can start PB-OS from the card, after saving a copy of the
+   original.
+7. To start PB-OS: hold Volume Down while you turn the handheld on, then set
+   Boot mode to Linux and Boot source to SD card. Android is still there:
+   hold Volume Up while you turn it on.
 
 If PB-OS has a newer update than the download, it comes along and PB-OS
 installs it on its first start.

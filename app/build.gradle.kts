@@ -37,8 +37,8 @@ android {
         applicationId = "org.projectbarry.pbosinstaller"
         minSdk = 30
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.3.3"
+        versionCode = 9
+        versionName = "0.4.1"
         buildConfigField("boolean", "ALLOW_UNTESTED", allowUntested.toString())
         buildConfigField("String", "RELEASES_REPO", "\"project-barry/pb-os\"")
         // Device-report relay (relay/worker.js), kept out of the repo: set pbosReportUrl in

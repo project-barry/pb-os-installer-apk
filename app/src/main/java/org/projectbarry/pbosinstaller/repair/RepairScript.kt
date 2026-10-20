@@ -31,7 +31,7 @@ object RepairScript {
         val statusFile: String,
         val outDir: String,
         val stock: List<AblScript.Known>,
-        val rocknix: List<AblScript.Known>,
+        val menus: List<AblScript.Known>,
     )
 
     fun checkBody(job: CheckJob): String {
@@ -42,7 +42,7 @@ ${ScriptKit.prelude(CHECK, job.id, job.statusFile)}
 OUT=${q(job.outDir)}
 [ "${'$'}(id -u)" = 0 ] || fail "This script must be run as root."
 status checking
-${AblScript.identifyFunctions(job.stock, job.rocknix)}
+${AblScript.identifyFunctions(job.stock, job.menus)}
 $COMMON
 MNT=/data/local/tmp/pbos-repair
 LOOPS=

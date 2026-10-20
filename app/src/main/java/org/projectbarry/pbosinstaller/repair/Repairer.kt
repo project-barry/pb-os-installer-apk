@@ -23,7 +23,7 @@ class Repairer(context: Context, private val soc: Soc) {
         val body = RepairScript.checkBody(
             RepairScript.CheckJob(
                 id, RootJobs.rootPath(jobs.statusFile(RepairScript.CHECK)), RootJobs.rootPath(outDir),
-                AblKnown.stock, AblKnown.rocknix.getValue(soc),
+                AblKnown.stock, AblKnown.menus.getValue(soc),
             )
         )
         return jobs.prepare(RepairScript.CHECK, id, body)

@@ -78,9 +78,11 @@ The app asks you before each step and never moves on by itself.
    computer): you need it to go back to stock Android or to install Android
    updates. Then tap **Install Boot Menu**.
 7. **Start PB-OS.** Turn the handheld off and hold **Volume Down** while you
-   turn it on. In the menu, set the device model, set the boot mode to Linux
-   and the boot source to the SD card, then start. Android is still there:
-   choose it in the same menu.
+   turn it on: the OpenABL menu opens (Volume Up and Down move, Power
+   selects). Set **Boot mode** to Linux, **Boot source** to SD card and
+   **Device model** to your handheld, then choose **Start**. The menu keeps
+   these settings. Android is still there: hold **Volume Up** while you turn
+   the handheld on, or set **Boot mode** back to Android.
 
 **The newest update comes along.** If PB-OS has a newer update than the
 download, the app downloads it too. PB-OS installs it on its first start and
@@ -157,12 +159,20 @@ browser or file manager the first time.
 
 ## The boot menu
 
-The boot menu is **ROCKNIX ABL** (version 1.2), made by the
-[ROCKNIX team](https://github.com/ROCKNIX/abl). The app carries an unchanged
-copy of their release for the Snapdragon 8 Gen 2 and 8 Gen 3, so it can
-install it without another download, and checks it before installing. ROCKNIX
-ABL is provided as is; its authors have not published a licence for it. All
-credit for it goes to the ROCKNIX team.
+The boot menu is **OpenABL** (version 1.1), made by the
+[Open Handheld Collective](https://github.com/OpenHandheldCollective/OpenABL);
+ROCKNIX uses it too. The app carries an unchanged copy of their release for the
+Snapdragon 8 Gen 2 and 8 Gen 3, so it can install it without another download,
+and checks it before installing. OpenABL is free software under the GNU GPL,
+version 3 or later; its source code is on its
+[v1.1 release page](https://github.com/OpenHandheldCollective/OpenABL/releases/tag/v1.1)
+(`openabl-v1.1-source.tar.xz`), with an unchanged copy on
+[Project Barry's fork](https://github.com/project-barry/OpenABL/releases/tag/v1.1). All credit for it goes to the Open Handheld
+Collective.
+
+Handhelds set up by earlier versions of the app have the **ROCKNIX ABL** 1.2
+boot menu by the ROCKNIX team. The app still recognizes it and offers OpenABL
+in its place.
 
 ## More detail
 
@@ -180,12 +190,13 @@ alone, so the app as built and installed is distributed under **GPL version
 3**. Bouncy Castle uses an MIT-style licence, which works with both.
 
 The app also carries two programs it doesn't link to, unchanged: 7-Zip's
-`7zzs` (GNU LGPL) and the ROCKNIX ABL boot menu (see
+`7zzs` (GNU LGPL) and the OpenABL boot menu (GNU GPL version 3 or later, see
 [The boot menu](#the-boot-menu)). Details:
 [docs/LICENSES.md](docs/LICENSES.md).
 
 - [LICENSE](LICENSE): GPL version 2
-- [LICENSES/](LICENSES/): GPL version 3, Apache License 2.0, Bouncy Castle Licence
+- [LICENSES/](LICENSES/): GPL version 3, Apache License 2.0, Bouncy Castle Licence,
+  7-Zip's licence, and OpenABL's notices and licence texts (`OpenABL-*`)
 - [docs/LICENSES.md](docs/LICENSES.md): the libraries in the app, also shown in
   the app under **Licenses**
 - The device-report relay ([relay/](relay/)) is part of this repo and under the

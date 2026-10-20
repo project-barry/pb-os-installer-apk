@@ -76,6 +76,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import org.projectbarry.pbosinstaller.BuildConfig
 import org.projectbarry.pbosinstaller.R
+import org.projectbarry.pbosinstaller.abl.AblKnown
 import org.projectbarry.pbosinstaller.abl.AblScript
 import org.projectbarry.pbosinstaller.device.Devices
 import org.projectbarry.pbosinstaller.internal.InternalLayout
@@ -339,7 +340,8 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel, modifier
                 Step.BootMenu -> {
                     Title("Set up the boot menu")
                     Body(
-                        "To start PB-OS from the card, your ${vm.handheld} needs the ROCKNIX boot menu. " +
+                        "To start PB-OS, your ${vm.handheld} needs a boot menu: OpenABL, " +
+                            "by the Open Handheld Collective (the boot menu ROCKNIX uses too). " +
                             "Android stays: you choose it in the same menu."
                     )
                     Body("First, the app saves a copy of the original boot loader. Nothing is changed yet.")
@@ -362,7 +364,7 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel, modifier
                 Step.AblInstallReady -> {
                     Title("Install the boot menu")
                     Warning(
-                        "This replaces the boot loader of your ${vm.handheld} with the ROCKNIX boot menu. " +
+                        "This replaces the boot loader of your ${vm.handheld} with the ${AblKnown.BUNDLED} boot menu. " +
                             "If anything goes wrong, the app puts the original back."
                     )
                     Button(onClick = vm::installBootMenu, modifier = Modifier.focusRing().focusRequester(primary)) {
@@ -375,10 +377,13 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel, modifier
                     Body("To start PB-OS:")
                     Body(
                         "1.  Turn your ${vm.handheld} off.\n" +
-                            "2.  Hold Volume Down while you turn it on.\n" +
-                            "3.  In the menu, set the device model, set the boot mode to Linux, then choose Start."
+                            "2.  Hold Volume Down while you turn it on. The OpenABL menu opens.\n" +
+                            "3.  Volume Up and Down move, Power selects.\n" +
+                            "4.  Set Boot mode to Linux and Device model to your handheld.\n" +
+                            "5.  Set Boot source: SD card for PB-OS on the card, Auto for PB-OS on internal storage.\n" +
+                            "6.  Choose Start (it reads Start Linux)."
                     )
-                    Body("Android is still there: choose it in the same menu.")
+                    AfterMenuSetUp()
                 }
 
                 Step.InternalChecking -> Busy("Checking internal storage…")
@@ -639,8 +644,25 @@ private fun BackedUpStep(step: Step.AblBackedUp, vm: InstallerViewModel, primary
 
 private fun slotLabel(slot: String): String = when {
     slot.startsWith("stock: ") -> "original boot loader (${slot.removePrefix("stock: ")})"
-    slot.startsWith("rocknix: ") -> slot.removePrefix("rocknix: ") + " boot menu"
+    AblKnown.menuName(slot) != null -> AblKnown.menuName(slot) + " boot menu"
     else -> "unknown boot loader"
+}
+
+/**
+ * After the boot menu is set up: how the next starts go and how to get to Android
+ * (OpenABL's README: settings are kept; Volume Up boots Android while the boot mode is Linux).
+ */
+@Composable
+private fun AfterMenuSetUp() {
+    Body("The menu keeps these settings, so from then on your handheld starts PB-OS by itself.")
+    Body(
+        "Android is still there: hold Volume Up while you turn the handheld on to start it once, " +
+            "or set Boot mode back to Android in the menu."
+    )
+    Body(
+        "Don't choose Uninstall CFW in the menu: it erases PB-OS on internal storage " +
+            "and all of Android's data."
+    )
 }
 
 /** Downloaded: the last check before the card is erased and written. */

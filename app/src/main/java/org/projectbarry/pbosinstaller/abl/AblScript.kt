@@ -4,7 +4,7 @@ import org.projectbarry.pbosinstaller.root.ScriptKit
 
 /**
  * Root scripts for the boot loader (ABL): back up both slots, then install the
- * ROCKNIX ABL (the boot menu that starts PB-OS from the card).
+ * boot menu (OpenABL) that starts PB-OS from the card.
  *
  * The ABL lives in the abl_a and abl_b partitions on the handheld's own storage.
  * A wrong ABL can stop the handheld from starting, so both scripts check the
@@ -13,6 +13,9 @@ import org.projectbarry.pbosinstaller.root.ScriptKit
 object AblScript {
     const val BACKUP = "abl-backup"
     const val INSTALL = "abl-install"
+
+    /** What `identify` prints before a boot menu's label ("menu: OpenABL 1.1"). */
+    const val MENU = "menu: "
 
     /** Known boot loaders: SHA-256 of what identifies them, and what to call them. */
     data class Known(val label: String, val sha256: String, val bytes: Long?)
@@ -28,15 +31,15 @@ object AblScript {
         val info: List<String>,
         /** Stock boot loaders, by the SHA-256 of the whole partition. */
         val stock: List<Known>,
-        /** ROCKNIX boot loaders, by the SHA-256 of their first [Known.bytes] bytes. */
-        val rocknix: List<Known>,
+        /** Boot menus (OpenABL, ROCKNIX), by the SHA-256 of their first [Known.bytes] bytes. */
+        val menus: List<Known>,
     )
 
     data class InstallJob(
         val id: String,
         val statusFile: String,
         val platform: String,
-        /** The ROCKNIX ABL to install, its size and SHA-256. */
+        /** The boot menu to install, its size and SHA-256. */
         val payload: String,
         val payloadBytes: Long,
         val payloadSha256: String,
@@ -56,23 +59,23 @@ done
 
     /**
      * Shell functions: `identify FILE` prints what a boot loader image is ("stock:
-     * <label>", "rocknix: <label>" or "unknown"). Needs ScriptKit's sha.
+     * <label>", "menu: <label>" or "unknown"). Needs ScriptKit's sha.
      */
-    fun identifyFunctions(stock: List<Known>, rocknix: List<Known>): String {
+    fun identifyFunctions(stock: List<Known>, menus: List<Known>): String {
         val stockCases = stock.joinToString("\n") { "    ${q(it.sha256)}) echo ${q("stock: " + it.label)};;" }
-        val rocknixChecks = rocknix.joinToString("\n") {
-            "  [ \"\$(head -c ${it.bytes} \"\$1\" | sha)\" = ${q(it.sha256)} ] && { echo ${q("rocknix: " + it.label)}; return; }"
+        val menuChecks = menus.joinToString("\n") {
+            "  [ \"\$(head -c ${it.bytes} \"\$1\" | sha)\" = ${q(it.sha256)} ] && { echo ${q(MENU + it.label)}; return; }"
         }
         return """
-# What a boot loader image is: a known stock one, a ROCKNIX version, or unknown.
+# What a boot loader image is: a known stock one, a known boot menu, or unknown.
 identify() {
   case "${'$'}(sha "${'$'}1")" in
 $stockCases
-    *) identify_rocknix "${'$'}1";;
+    *) identify_menu "${'$'}1";;
   esac
 }
-identify_rocknix() {
-$rocknixChecks
+identify_menu() {
+$menuChecks
   echo unknown
 }
 """.trim()
@@ -85,7 +88,7 @@ ${ScriptKit.prelude(BACKUP, job.id, job.statusFile)}
 # Backs up the boot loader (both ABL slots) and says what each slot holds.
 DIR=${q(job.backupDir)}
 ${checks(job.platform)}
-${identifyFunctions(job.stock, job.rocknix)}
+${identifyFunctions(job.stock, job.menus)}
 
 status backing-up
 mkdir -p "${'$'}DIR" && give "${'$'}DIR"
@@ -113,7 +116,7 @@ status done
 
     fun installBody(job: InstallJob): String = """
 ${ScriptKit.prelude(INSTALL, job.id, job.statusFile)}
-# Installs the ROCKNIX ABL in both slots, slot b first. If slot a can't be written
+# Installs the boot menu in both slots, slot b first. If slot a can't be written
 # correctly, the backed-up original goes back into it, so the handheld still starts.
 PAYLOAD=${q(job.payload)}
 PAYLOAD_BYTES=${q(job.payloadBytes.toString())}

@@ -20,12 +20,29 @@ version 3 of the GPL. So the app, as you install it, comes to you under
   [7-zip.org](https://www.7-zip.org/), shipped inside the app as `lib7zzs.so`; its source code is
   at [7-zip.org](https://www.7-zip.org/download.html).
 
-- **ROCKNIX ABL 1.2** by the ROCKNIX team (the boot menu the app installs):
-  the unchanged `abl_signed-SM8550.elf` and `abl_signed-SM8650.elf` from their
-  [v1.2 release](https://github.com/ROCKNIX/abl/releases). The ROCKNIX team has
-  not published a licence for it; it is provided as is, and all credit goes to
-  them. It is a separate program the app writes to the boot loader partitions;
-  the app's licence does not cover it.
+- **OpenABL 1.1** by the [Open Handheld Collective](https://github.com/OpenHandheldCollective)
+  (the boot menu the app installs; ROCKNIX uses it too): the unchanged
+  `abl_signed-SM8550.elf` and `abl_signed-SM8650.elf` from their
+  [v1.1 release](https://github.com/OpenHandheldCollective/OpenABL/releases/tag/v1.1).
+  OpenABL is free software under the GNU General Public License, version 3 or
+  (at your option) any later version, Copyright (C) 2026-present Open Handheld
+  Collective, with an added permission to link with Qualcomm's boot loader.
+  Each image also contains Qualcomm's boot loader and other parts under
+  BSD, MIT, ISC, Apache 2.0, Zlib and OpenSSL/SSLeay licences; OpenABL's own list of
+  them, its copyright notices and every licence text follow below. "This
+  product includes software developed by the OpenSSL Project for use in the
+  OpenSSL Toolkit (http://www.openssl.org/)" and "This product includes
+  cryptographic software written by Eric Young (eay@cryptsoft.com)".
+  Its complete source code is the release's `openabl-v1.1-source.tar.xz`
+  (OpenABL at that version plus every source its build downloads), at
+  [github.com/OpenHandheldCollective/OpenABL/releases/tag/v1.1](https://github.com/OpenHandheldCollective/OpenABL/releases/tag/v1.1),
+  with an unchanged copy (SHA-256 9aca67ccfc258dbc7baf5db2d3ee43d93780d6f577260524e269e0e182dc8b80) at
+  [github.com/project-barry/OpenABL/releases/tag/v1.1](https://github.com/project-barry/OpenABL/releases/tag/v1.1).
+  It is a separate program the app writes to the boot loader partitions; it
+  is not part of the app's own code.
+
+Earlier versions of the app installed ROCKNIX ABL 1.2 by the ROCKNIX team; the
+app still recognizes it on handhelds that have it, but no longer carries it.
 
 The app icon is the Project Barry logo.
 

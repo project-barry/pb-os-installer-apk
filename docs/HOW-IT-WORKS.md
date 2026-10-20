@@ -253,7 +253,8 @@ Downloaded ──[Install PB-OS ×5]──▶ InternalWriting ─▶ InternalDon
   Wi-Fi, password, ssh, Tailscale) is new. Bundled Decky plugins stay at their
   old versions until the next update.
 - The 5-tap button follows the boot loader backup's rule. The ABL isn't
-  touched: an internal Linux install already has the ROCKNIX boot menu.
+  touched: an internal Linux install already has a boot menu (ROCKNIX's
+  or OpenABL).
 
 ### Dry run on a handheld
 

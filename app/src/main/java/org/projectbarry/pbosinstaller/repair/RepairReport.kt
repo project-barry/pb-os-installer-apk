@@ -1,6 +1,8 @@
 package org.projectbarry.pbosinstaller.repair
 
 import org.json.JSONObject
+import org.projectbarry.pbosinstaller.abl.AblKnown
+import org.projectbarry.pbosinstaller.abl.AblScript
 import java.io.File
 import java.security.MessageDigest
 
@@ -75,11 +77,11 @@ data class RepairReport(val installs: List<Install>, val bootMenu: List<Finding>
                     "current one becomes KERNEL.bad."
         }
 
-        /** The ROCKNIX boot menu, through the installer's backup → 5 taps → install steps. */
+        /** The boot menu (OpenABL), through the installer's backup → 5 taps → install steps. */
         data object BootMenu : Fix {
             override val label get() = "Reinstall the Boot Menu"
             override val explain get() =
-                "Backs up the boot loader first, then puts the ROCKNIX boot menu back (the same steps as installing)."
+                "Backs up the boot loader first, then installs the OpenABL boot menu (the same steps as installing)."
         }
     }
 
@@ -185,20 +187,29 @@ data class RepairReport(val installs: List<Install>, val bootMenu: List<Finding>
             return install to fixes
         }
 
-        /** Both slots must hold the ROCKNIX boot menu. */
+        /** Both slots must hold a boot menu (OpenABL, or ROCKNIX's from earlier installs). */
         fun bootMenu(file: File): Pair<List<Finding>, Fix?> {
             val slots = runCatching { file.readLines() }.getOrDefault(emptyList())
                 .mapNotNull { l -> l.split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1].trim() } }.toMap()
             if (slots.isEmpty()) return listOf(Finding(Level.Note, "Couldn't read the boot loader.")) to null
             val findings = slots.toSortedMap().map { (slot, what) ->
                 val name = "Slot ${slot.removePrefix("abl_").uppercase()}"
+                val menu = AblKnown.menuName(what)
                 when {
-                    what.startsWith("rocknix: ") -> Finding(Level.Ok, "$name: ${what.removePrefix("rocknix: ")} boot menu.")
+                    menu != null -> Finding(Level.Ok, "$name: $menu boot menu.")
                     what.startsWith("stock: ") -> Finding(Level.Problem, "$name: the original boot loader (no boot menu). An Android update may have put it back.")
                     else -> Finding(Level.Problem, "$name: a boot loader the app doesn't know.")
                 }
             }
-            return findings to if (findings.any { it.level == Level.Problem }) Fix.BootMenu else null
+            // A working older menu (ROCKNIX's) can still be switched to the bundled one.
+            val older = findings.none { it.level == Level.Problem } &&
+                slots.values.any { it != AblScript.MENU + AblKnown.BUNDLED }
+            val notes = if (older) {
+                listOf(Finding(Level.Note, "${AblKnown.BUNDLED} can replace this boot menu."))
+            } else {
+                emptyList()
+            }
+            return findings + notes to if (older || findings.any { it.level == Level.Problem }) Fix.BootMenu else null
         }
 
         fun hash(algorithm: String, b: ByteArray): String =

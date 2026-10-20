@@ -121,6 +121,20 @@ fun LicensesDialog(onClose: () -> Unit) = DocDialog(
         "Apache License 2.0" to "licenses/Apache-2.0.txt",
         "Bouncy Castle Licence" to "licenses/BouncyCastle.txt",
         "7-Zip licence" to "licenses/7-Zip.txt",
+        // OpenABL (the boot menu the app installs): its notices and the licence texts its
+        // release ships in LICENSES/ (its GPL-3.0 and Apache-2.0 texts are the ones above).
+        "OpenABL: licences and notices" to "licenses/OpenABL-NOTICES.txt",
+        "OpenABL: GPL-3.0 linking permission" to "licenses/OpenABL-GPL-3.0-linking-source-exception.txt",
+        "OpenABL: GPL-2.0-only" to "licenses/OpenABL-GPL-2.0-only.txt",
+        "OpenABL: BSD-2-Clause-Patent" to "licenses/OpenABL-BSD-2-Clause-Patent.txt",
+        "OpenABL: BSD-2-Clause" to "licenses/OpenABL-BSD-2-Clause.txt",
+        "OpenABL: BSD-3-Clause" to "licenses/OpenABL-BSD-3-Clause.txt",
+        "OpenABL: BSD-3-Clause-Clear" to "licenses/OpenABL-BSD-3-Clause-Clear.txt",
+        "OpenABL: BoringSSL" to "licenses/OpenABL-BoringSSL.txt",
+        "OpenABL: MIT" to "licenses/OpenABL-MIT.txt",
+        "OpenABL: Zlib" to "licenses/OpenABL-Zlib.txt",
+        "OpenABL: Montserrat font (OFL-1.1)" to "licenses/OpenABL-Montserrat-OFL.txt",
+        "OpenABL: Source Han Sans font (OFL-1.1)" to "licenses/OpenABL-SourceHanSans-OFL.txt",
     ),
     onClose = onClose,
 )

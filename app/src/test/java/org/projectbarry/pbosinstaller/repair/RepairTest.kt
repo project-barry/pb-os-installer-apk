@@ -140,7 +140,16 @@ class RepairTest {
         val (findings, fix) = RepairReport.bootMenu(f)
         assertEquals(RepairReport.Level.Problem, findings[0].level)
         assertEquals(RepairReport.Fix.BootMenu, fix)
+        // Working older menus: fine, but the bundled one is offered.
         f.writeText("abl_a=rocknix: ROCKNIX 1.2\nabl_b=rocknix: ROCKNIX 1.1.8\n")
+        val (older, switch) = RepairReport.bootMenu(f)
+        assertTrue(older.none { it.level == RepairReport.Level.Problem })
+        assertEquals(RepairReport.Fix.BootMenu, switch)
+        f.writeText("abl_a=menu: OpenABL 1.1\nabl_b=menu: ROCKNIX 1.2\n")
+        val (ok, mixed) = RepairReport.bootMenu(f)
+        assertEquals(RepairReport.Fix.BootMenu, mixed)
+        assertEquals("Slot A: OpenABL 1.1 boot menu.", ok.first().text)
+        f.writeText("abl_a=menu: OpenABL 1.1\nabl_b=menu: OpenABL 1.1\n")
         assertNull(RepairReport.bootMenu(f).second)
     }
 
@@ -153,7 +162,7 @@ class RepairTest {
     }
 
     @Test fun checkOnlyReads() {
-        val body = RepairScript.checkBody(RepairScript.CheckJob("c", "/x/status", "/x/found", AblKnown.stock, AblKnown.rocknix.getValue(Soc.SM8550)))
+        val body = RepairScript.checkBody(RepairScript.CheckJob("c", "/x/status", "/x/found", AblKnown.stock, AblKnown.menus.getValue(Soc.SM8550)))
         assertValidShell(body)
         assertFalse(Regex("mount -t \\S+ -o rw").containsMatchIn(body))
         assertFalse("of=" in body)
