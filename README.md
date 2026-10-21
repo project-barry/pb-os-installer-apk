@@ -159,20 +159,22 @@ browser or file manager the first time.
 
 ## The boot menu
 
-The boot menu is **OpenABL** (version 1.1), made by the
+The boot menu is **OpenABL** (version 1.2), made by the
 [Open Handheld Collective](https://github.com/OpenHandheldCollective/OpenABL);
-ROCKNIX uses it too. The app carries an unchanged copy of their release for the
-Snapdragon 8 Gen 2 and 8 Gen 3, so it can install it without another download,
-and checks it before installing. OpenABL is free software under the GNU GPL,
-version 3 or later; its source code is on its
-[v1.1 release page](https://github.com/OpenHandheldCollective/OpenABL/releases/tag/v1.1)
-(`openabl-v1.1-source.tar.xz`), with an unchanged copy on
-[Project Barry's fork](https://github.com/project-barry/OpenABL/releases/tag/v1.1). All credit for it goes to the Open Handheld
+ROCKNIX uses it too. Version 1.2 comes from
+[Project Barry's fork](https://github.com/project-barry/OpenABL/releases/tag/v1.2):
+their v1.1 plus a fix for an occasional freeze on the logo at startup. The app
+carries an unchanged copy of it for the Snapdragon 8 Gen 2 and 8 Gen 3, so it
+can install it without another download, and checks it before installing.
+OpenABL is free software under the GNU GPL, version 3 or later; its source code
+is on the [v1.2 release page](https://github.com/project-barry/OpenABL/releases/tag/v1.2)
+(`openabl-v1.2-source.tar.xz`). All credit for OpenABL goes to the Open Handheld
 Collective.
 
-Handhelds set up by earlier versions of the app have the **ROCKNIX ABL** 1.2
-boot menu by the ROCKNIX team. The app still recognizes it and offers OpenABL
-in its place.
+Handhelds set up by app 0.4.1 have OpenABL 1.1; Repair → Reinstall the Boot
+Menu puts 1.2 in its place. Handhelds set up by earlier versions of the app have
+the **ROCKNIX ABL** 1.2 boot menu by the ROCKNIX team. The app still recognizes
+both and offers OpenABL 1.2 in their place.
 
 ## More detail
 

@@ -66,11 +66,11 @@ class AblScriptTest {
         }
     }
 
-    /** OpenABL 1.1 for each chip, and the bundled file is also what the backup recognizes. */
-    @Test fun bundledIsOpenAbl11AndKnown() {
-        assertEquals("OpenABL 1.1", AblKnown.BUNDLED)
+    /** OpenABL 1.2 for each chip, and the bundled file is also what the backup recognizes. */
+    @Test fun bundledIsOpenAbl12AndKnown() {
+        assertEquals("OpenABL 1.2", AblKnown.BUNDLED)
         AblKnown.payload.forEach { (soc, p) ->
-            assertTrue(p.asset, p.asset.startsWith("abl/openabl-1.1/"))
+            assertTrue(p.asset, p.asset.startsWith("abl/openabl-1.2/"))
             assertTrue(p.asset, p.asset.endsWith("abl_signed-${soc.name}.elf"))
             assertEquals(p.label, AblKnown.BUNDLED)
             assertTrue(soc.name, AblKnown.menus.getValue(soc).any { it.label == p.label && it.sha256 == p.sha256 && it.bytes == p.bytes })
@@ -90,14 +90,30 @@ class AblScriptTest {
         assertEquals(null, AblKnown.menuName("stock: AYN Thor (firmware 2026-02-06)"))
     }
 
+    /** OpenABL 1.1 (app 0.4.1) stays recognized on both chips and is called older. */
+    @Test fun openAbl11StillKnown() {
+        mapOf(
+            Soc.SM8550 to "cd97748bbd1c5dc994b8a73a05e88955297f4c88384e3ca4028d043fc1b16848",
+            Soc.SM8650 to "8fd6a18ec30a8c24751b7db73a6ecb0d9df9f2e1432973273d572841ff3f6216",
+        ).forEach { (soc, sha) ->
+            assertTrue(soc.name, AblKnown.menus.getValue(soc).any { it.label == "OpenABL 1.1" && it.sha256 == sha && it.bytes == 532480L })
+        }
+        assertEquals("OpenABL 1.1 boot menu (older version)", AblKnown.menuLabel("OpenABL 1.1"))
+        assertEquals("OpenABL 1.2 boot menu", AblKnown.menuLabel("OpenABL 1.2"))
+        assertEquals("ROCKNIX 1.2 boot menu", AblKnown.menuLabel("ROCKNIX 1.2"))
+    }
+
     @Test fun alreadyInstalledOnlyWithBothSlotsOnTheBundledVersion() {
-        assertTrue(AblKnown.alreadyInstalled("menu: OpenABL 1.1", "menu: OpenABL 1.1"))
+        assertTrue(AblKnown.alreadyInstalled("menu: OpenABL 1.2", "menu: OpenABL 1.2"))
+        // OpenABL 1.1 (what app 0.4.1 installed) gets 1.2 offered.
+        assertFalse(AblKnown.alreadyInstalled("menu: OpenABL 1.1", "menu: OpenABL 1.1"))
+        assertFalse(AblKnown.alreadyInstalled("menu: OpenABL 1.2", "menu: OpenABL 1.1"))
         // ROCKNIX 1.2 (what app 0.3 installed) gets OpenABL offered.
         assertFalse(AblKnown.alreadyInstalled("menu: ROCKNIX 1.2", "menu: ROCKNIX 1.2"))
-        assertFalse(AblKnown.alreadyInstalled("menu: OpenABL 1.1", "menu: OpenABL 1.0"))
+        assertFalse(AblKnown.alreadyInstalled("menu: OpenABL 1.2", "menu: OpenABL 1.0"))
         assertFalse(AblKnown.alreadyInstalled("stock: KONKR Pocket FIT (firmware 2025-12-26)", "menu: ROCKNIX 1.1.8"))
         // The label the script prints must be what alreadyInstalled looks for.
-        assertTrue("echo 'menu: OpenABL 1.1'" in AblScript.backupBody(backup))
+        assertTrue("echo 'menu: OpenABL 1.2'" in AblScript.backupBody(backup))
     }
 
     /** identify really names each known menu, run against files on this computer. */
@@ -119,7 +135,7 @@ class AblScriptTest {
         val p = ProcessBuilder(listOf("/bin/sh", script.path) + files.map { it.path }).redirectErrorStream(true).start()
         val out = p.inputStream.bufferedReader().readLines()
         assertEquals(0, p.waitFor())
-        assertEquals(listOf("menu: OpenABL 1.1", "unknown"), out)
+        assertEquals(listOf("menu: OpenABL 1.2", "unknown"), out)
         dir.deleteRecursively()
     }
 }

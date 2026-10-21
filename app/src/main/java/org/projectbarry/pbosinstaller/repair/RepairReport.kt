@@ -196,12 +196,12 @@ data class RepairReport(val installs: List<Install>, val bootMenu: List<Finding>
                 val name = "Slot ${slot.removePrefix("abl_").uppercase()}"
                 val menu = AblKnown.menuName(what)
                 when {
-                    menu != null -> Finding(Level.Ok, "$name: $menu boot menu.")
+                    menu != null -> Finding(Level.Ok, "$name: ${AblKnown.menuLabel(menu)}.")
                     what.startsWith("stock: ") -> Finding(Level.Problem, "$name: the original boot loader (no boot menu). An Android update may have put it back.")
                     else -> Finding(Level.Problem, "$name: a boot loader the app doesn't know.")
                 }
             }
-            // A working older menu (ROCKNIX's) can still be switched to the bundled one.
+            // A working older menu (an older OpenABL, or ROCKNIX's) can still be switched to the bundled one.
             val older = findings.none { it.level == Level.Problem } &&
                 slots.values.any { it != AblScript.MENU + AblKnown.BUNDLED }
             val notes = if (older) {

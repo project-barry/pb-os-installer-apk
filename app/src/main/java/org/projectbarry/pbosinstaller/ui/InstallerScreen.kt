@@ -644,7 +644,7 @@ private fun BackedUpStep(step: Step.AblBackedUp, vm: InstallerViewModel, primary
 
 private fun slotLabel(slot: String): String = when {
     slot.startsWith("stock: ") -> "original boot loader (${slot.removePrefix("stock: ")})"
-    AblKnown.menuName(slot) != null -> AblKnown.menuName(slot) + " boot menu"
+    AblKnown.menuName(slot) != null -> AblKnown.menuLabel(AblKnown.menuName(slot)!!)
     else -> "unknown boot loader"
 }
 

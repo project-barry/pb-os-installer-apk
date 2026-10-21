@@ -145,11 +145,17 @@ class RepairTest {
         val (older, switch) = RepairReport.bootMenu(f)
         assertTrue(older.none { it.level == RepairReport.Level.Problem })
         assertEquals(RepairReport.Fix.BootMenu, switch)
-        f.writeText("abl_a=menu: OpenABL 1.1\nabl_b=menu: ROCKNIX 1.2\n")
+        f.writeText("abl_a=menu: OpenABL 1.2\nabl_b=menu: ROCKNIX 1.2\n")
         val (ok, mixed) = RepairReport.bootMenu(f)
         assertEquals(RepairReport.Fix.BootMenu, mixed)
-        assertEquals("Slot A: OpenABL 1.1 boot menu.", ok.first().text)
+        assertEquals("Slot A: OpenABL 1.2 boot menu.", ok.first().text)
+        // OpenABL 1.1 (app 0.4.1) works, is called older, and 1.2 is offered.
         f.writeText("abl_a=menu: OpenABL 1.1\nabl_b=menu: OpenABL 1.1\n")
+        val (old11, update) = RepairReport.bootMenu(f)
+        assertTrue(old11.none { it.level == RepairReport.Level.Problem })
+        assertEquals("Slot A: OpenABL 1.1 boot menu (older version).", old11.first().text)
+        assertEquals(RepairReport.Fix.BootMenu, update)
+        f.writeText("abl_a=menu: OpenABL 1.2\nabl_b=menu: OpenABL 1.2\n")
         assertNull(RepairReport.bootMenu(f).second)
     }
 

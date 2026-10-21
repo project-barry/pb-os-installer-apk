@@ -132,15 +132,16 @@ object AblKnown {
     data class Payload(val asset: String, val bytes: Long, val sha256: String, val label: String)
 
     /**
-     * The boot menu the app installs: OpenABL 1.1, bundled unchanged from
-     * github.com/OpenHandheldCollective/OpenABL release v1.1 (each file matches its
-     * .sha256, the copy in openabl-v1.1.tar.gz and GitHub's asset digest).
+     * The boot menu the app installs: OpenABL 1.2, bundled unchanged from
+     * github.com/project-barry/OpenABL release v1.2 (the Open Handheld Collective's
+     * v1.1 plus a fix for an occasional freeze on the logo at startup; each file
+     * matches its .sha256 and GitHub's asset digest).
      * 532480 bytes, so it fits the 1 MiB abl partitions; the install script checks.
      */
-    const val BUNDLED = "OpenABL 1.1"
+    const val BUNDLED = "OpenABL 1.2"
     val payload = mapOf(
-        Soc.SM8550 to Payload("abl/openabl-1.1/abl_signed-SM8550.elf", 532480, "cd97748bbd1c5dc994b8a73a05e88955297f4c88384e3ca4028d043fc1b16848", BUNDLED),
-        Soc.SM8650 to Payload("abl/openabl-1.1/abl_signed-SM8650.elf", 532480, "8fd6a18ec30a8c24751b7db73a6ecb0d9df9f2e1432973273d572841ff3f6216", BUNDLED),
+        Soc.SM8550 to Payload("abl/openabl-1.2/abl_signed-SM8550.elf", 532480, "c7d681004563b69d892b5f93d3fac66a5f555c273c39ebf05febc72f95699df8", BUNDLED),
+        Soc.SM8650 to Payload("abl/openabl-1.2/abl_signed-SM8650.elf", 532480, "c32434666ad5c725caa149151cfc5a66918c40f05e3f692c93795481910a6422", BUNDLED),
     )
 
     /**
@@ -150,12 +151,14 @@ object AblKnown {
      */
     val menus = mapOf(
         Soc.SM8550 to listOf(
-            AblScript.Known(BUNDLED, "cd97748bbd1c5dc994b8a73a05e88955297f4c88384e3ca4028d043fc1b16848", 532480),
+            AblScript.Known(BUNDLED, "c7d681004563b69d892b5f93d3fac66a5f555c273c39ebf05febc72f95699df8", 532480),
+            AblScript.Known("OpenABL 1.1", "cd97748bbd1c5dc994b8a73a05e88955297f4c88384e3ca4028d043fc1b16848", 532480),
             AblScript.Known("ROCKNIX 1.2", "8c27a70961476b327071ada2fd9b9c55dd2dcdc913eff3d33f2576133d7e398c", 258048),
             AblScript.Known("ROCKNIX 1.1.8", "5f1018211feaa109563d5890ab52dccfb31db90f4bbe9e6b7fb39e94f860f8d4", 258048),
         ),
         Soc.SM8650 to listOf(
-            AblScript.Known(BUNDLED, "8fd6a18ec30a8c24751b7db73a6ecb0d9df9f2e1432973273d572841ff3f6216", 532480),
+            AblScript.Known(BUNDLED, "c32434666ad5c725caa149151cfc5a66918c40f05e3f692c93795481910a6422", 532480),
+            AblScript.Known("OpenABL 1.1", "8fd6a18ec30a8c24751b7db73a6ecb0d9df9f2e1432973273d572841ff3f6216", 532480),
             AblScript.Known("OpenABL 1.0", "23046d198dddaab53d7afc17bd726de4d2c65b6eb24d984a6b72e9a0963ba32c", 532480),
             AblScript.Known("ROCKNIX 1.2", "053e1e9e8300c29de68866c6c09e5527b1222d2ee774757d9cfbe8346137d6b6", 258048),
             AblScript.Known("ROCKNIX 1.1.8", "4ed04dda4da2ac76bc27925ae68094c055a043697f1a1bee4b958b979905bed5", 258048),
@@ -173,7 +176,11 @@ object AblKnown {
     fun alreadyInstalled(slotA: String?, slotB: String?): Boolean =
         slotA == AblScript.MENU + BUNDLED && slotB == AblScript.MENU + BUNDLED
 
-    /** "menu: OpenABL 1.1" → "OpenABL 1.1"; also reads "rocknix: …" from app versions before 0.4. */
+    /** "OpenABL 1.1 boot menu (older version)": an OpenABL other than the bundled one is called older. */
+    fun menuLabel(menu: String): String =
+        if (menu.startsWith("OpenABL ") && menu != BUNDLED) "$menu boot menu (older version)" else "$menu boot menu"
+
+    /** "menu: OpenABL 1.2" → "OpenABL 1.2"; also reads "rocknix: …" from app versions before 0.4. */
     fun menuName(slot: String): String? = when {
         slot.startsWith(AblScript.MENU) -> slot.removePrefix(AblScript.MENU)
         slot.startsWith("rocknix: ") -> slot.removePrefix("rocknix: ")

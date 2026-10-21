@@ -14,7 +14,7 @@ object AblScript {
     const val BACKUP = "abl-backup"
     const val INSTALL = "abl-install"
 
-    /** What `identify` prints before a boot menu's label ("menu: OpenABL 1.1"). */
+    /** What `identify` prints before a boot menu's label ("menu: OpenABL 1.2"). */
     const val MENU = "menu: "
 
     /** Known boot loaders: SHA-256 of what identifies them, and what to call them. */

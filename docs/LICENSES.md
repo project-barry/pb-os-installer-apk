@@ -20,10 +20,13 @@ version 3 of the GPL. So the app, as you install it, comes to you under
   [7-zip.org](https://www.7-zip.org/), shipped inside the app as `lib7zzs.so`; its source code is
   at [7-zip.org](https://www.7-zip.org/download.html).
 
-- **OpenABL 1.1** by the [Open Handheld Collective](https://github.com/OpenHandheldCollective)
+- **OpenABL 1.2** by the [Open Handheld Collective](https://github.com/OpenHandheldCollective)
   (the boot menu the app installs; ROCKNIX uses it too): the unchanged
-  `abl_signed-SM8550.elf` and `abl_signed-SM8650.elf` from their
-  [v1.1 release](https://github.com/OpenHandheldCollective/OpenABL/releases/tag/v1.1).
+  `abl_signed-SM8550.elf` and `abl_signed-SM8650.elf` from the
+  [v1.2 release of Project Barry's fork](https://github.com/project-barry/OpenABL/releases/tag/v1.2),
+  which is the Open Handheld Collective's
+  [v1.1](https://github.com/OpenHandheldCollective/OpenABL/releases/tag/v1.1)
+  plus a fix for an occasional freeze on the logo at startup.
   OpenABL is free software under the GNU General Public License, version 3 or
   (at your option) any later version, Copyright (C) 2026-present Open Handheld
   Collective, with an added permission to link with Qualcomm's boot loader.
@@ -33,11 +36,10 @@ version 3 of the GPL. So the app, as you install it, comes to you under
   product includes software developed by the OpenSSL Project for use in the
   OpenSSL Toolkit (http://www.openssl.org/)" and "This product includes
   cryptographic software written by Eric Young (eay@cryptsoft.com)".
-  Its complete source code is the release's `openabl-v1.1-source.tar.xz`
-  (OpenABL at that version plus every source its build downloads), at
-  [github.com/OpenHandheldCollective/OpenABL/releases/tag/v1.1](https://github.com/OpenHandheldCollective/OpenABL/releases/tag/v1.1),
-  with an unchanged copy (SHA-256 9aca67ccfc258dbc7baf5db2d3ee43d93780d6f577260524e269e0e182dc8b80) at
-  [github.com/project-barry/OpenABL/releases/tag/v1.1](https://github.com/project-barry/OpenABL/releases/tag/v1.1).
+  Its complete source code is the release's `openabl-v1.2-source.tar.xz`
+  (SHA-256 d8f47640e7d91695961971dea8bb8eab8270db013883736804449503fbd94da5;
+  OpenABL at that version plus every source its build downloads), at
+  [github.com/project-barry/OpenABL/releases/tag/v1.2](https://github.com/project-barry/OpenABL/releases/tag/v1.2).
   It is a separate program the app writes to the boot loader partitions; it
   is not part of the app's own code.
 
