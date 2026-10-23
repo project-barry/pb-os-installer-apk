@@ -71,6 +71,19 @@ curl -X POST https://pbos-device-report.<your-subdomain>.workers.dev/report \
 It should answer `{"status":"sent"}`, and a report should appear in the
 Discord channel. Running it again answers `{"status":"duplicate"}`.
 
+## Sound reports (PB-OS Sound Check)
+
+The same Worker takes sound reports from the PB-OS image's PB-OS Sound
+Check app at `/sound-report`, only after the user taps Send. The device sends
+just the sound parts of its report (Wi-Fi, Bluetooth and network lines left
+out, addresses masked); the Worker masks MAC and IP addresses again and posts
+the report as a text file. Limits: 6 per address and 60 in total per day, a
+512 KB cap, and the same report within a week is dropped.
+
+Setup: a **private** channel (it gets system logs), a webhook in it, and the
+webhook URL as one more Worker secret, `SOUND_WEBHOOK`. Without that secret
+the Worker answers `not_set_up` and nothing is posted.
+
 ## If someone abuses it
 
 Each report is limited to the fixed fields above, so the worst anyone can post
