@@ -47,7 +47,8 @@ class WriteScriptTest {
     @Test fun bodyHasEveryCheck() {
         val body = WriteScript.body(job)
         listOf(
-            "device/type", // only the SD card
+            "device/type", // the SD card
+            "*/usb*", // or a USB drive, never the UFS sd disks
             "512711720960", // the card the app saw
             "(/|/system|/vendor|/data|/metadata)", // never what the system runs from
             "card is too small",

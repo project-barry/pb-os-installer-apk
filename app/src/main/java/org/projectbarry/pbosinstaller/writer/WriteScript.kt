@@ -69,12 +69,19 @@ io_bytes() { sed -n "s/^${'$'}2: //p" /proc/${'$'}1/io 2>/dev/null; }
 
 [ -n "${'$'}DRY_RUN_TARGET" ] || [ "${'$'}(id -u)" = 0 ] || fail "This script must be run as root."
 
-# The card: the mmcblk disk whose type is SD (not mmcblk0 on every handheld).
+# The card: the mmcblk disk whose type is SD (not mmcblk0 on every handheld). With
+# no card in, a USB drive: an sd disk on the USB bus (the handheld's own UFS
+# storage is sd too, so the bus decides, never the name).
 DEV=
 for b in /sys/block/mmcblk*; do
   [ "${'$'}(cat "${'$'}b/device/type" 2>/dev/null)" = SD ] && DEV=${'$'}{b##*/}
 done
-[ -n "${'$'}DEV" ] || fail "No microSD card found. Put the card back in and try again."
+if [ -z "${'$'}DEV" ]; then
+  for b in /sys/block/sd*; do
+    case "${'$'}(readlink -f "${'$'}b")" in */usb*) DEV=${'$'}{b##*/} ;; esac
+  done
+fi
+[ -n "${'$'}DEV" ] || fail "No microSD card or USB drive found. Put it back in and try again."
 # Byte counts: multiplied with expr (64-bit), compared with ge (never $(( )) or -ge).
 SIZE=${'$'}(expr "${'$'}(cat /sys/block/${'$'}DEV/size)" '*' 512)
 if [ -n "${'$'}CARD_BYTES" ] && [ "${'$'}SIZE" != "${'$'}CARD_BYTES" ]; then

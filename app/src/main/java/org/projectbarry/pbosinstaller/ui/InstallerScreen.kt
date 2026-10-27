@@ -669,12 +669,12 @@ private fun AfterMenuSetUp() {
 @Composable
 private fun WriteStep(step: Step.Downloaded, card: SdCard?, vm: InstallerViewModel, primary: FocusRequester) {
     Title("PB-OS ${step.image.tag} is ready")
-    Body("It's downloaded and checked. Next, write it to your microSD card.")
+    Body("It's downloaded and checked. Next, write it to your microSD card or USB drive.")
     when {
-        card == null -> Warning("Put the microSD card back in to continue.")
-        !card.bigEnough -> Warning("This card is too small. PB-OS needs a microSD card of 32 GB or bigger.")
+        card == null -> Warning("Put the microSD card or USB drive back in to continue.")
+        !card.bigEnough -> Warning("This card is too small. PB-OS needs a card or drive of 32 GB or bigger.")
         else -> Warning(
-            "Writing ERASES EVERYTHING on the microSD card" +
+            "Writing ERASES EVERYTHING on the microSD card or USB drive" +
                 (card.sizeBytes?.let { " (${formatBytes(it)})" } ?: "") + "."
         )
     }
@@ -682,7 +682,7 @@ private fun WriteStep(step: Step.Downloaded, card: SdCard?, vm: InstallerViewMod
         onClick = vm::prepareWrite,
         enabled = card != null && card.bigEnough,
         modifier = Modifier.focusRing().focusRequester(primary),
-    ) { Text("Write to SD Card") }
+    ) { Text("Write to Card / Drive") }
 }
 
 /** What the internal check found: what goes, what stays, how big PB-OS's parts will be. */
@@ -764,13 +764,13 @@ private fun InternalInstallStep(step: Step.Downloaded, vm: InstallerViewModel, p
 /** Insert a card, then Continue: the app never moves on by itself when a card goes in. */
 @Composable
 private fun CardStep(card: SdCard?, vm: InstallerViewModel, primary: FocusRequester) {
-    Title("Insert a microSD card")
-    Body("PB-OS runs from a microSD card of 32 GB or bigger. Put one in the card slot, then tap Continue.")
+    Title("Insert a microSD card or USB drive")
+    Body("PB-OS runs from a microSD card or a USB drive of 32 GB or bigger. Put one in, then tap Continue.")
     when {
         card == null -> Body("No card found yet.")
         !card.bigEnough -> Warning(
             "This card is too small (${card.sizeBytes?.let(::formatBytes)}). " +
-                "PB-OS needs a microSD card of 32 GB or bigger."
+                "PB-OS needs a card or drive of 32 GB or bigger."
         )
         else -> Body("✓ Card found" + (card.sizeBytes?.let { ": ${formatBytes(it)}" } ?: "") + ".")
     }
@@ -818,7 +818,7 @@ private fun OfferStep(step: Step.Offer, card: SdCard?, vm: InstallerViewModel, p
             "Installing PB-OS ERASES the $kind install on internal storage, with its games, saves and settings. " +
                 "Android isn't touched."
         } else {
-            "Installing PB-OS ERASES EVERYTHING on the microSD card" +
+            "Installing PB-OS ERASES EVERYTHING on the microSD card or USB drive" +
                 (listOfNotNull(card?.label, card?.sizeBytes?.let(::formatBytes))
                     .takeIf { it.isNotEmpty() }?.joinToString(", ", " (", ")") ?: "") +
                 ". Copy anything you want to keep off the card first."
