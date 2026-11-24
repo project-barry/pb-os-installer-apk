@@ -13,7 +13,7 @@
 > **Watch Project Barry on YouTube:** https://www.youtube.com/@Project-Barry
 
 An Android app that puts [PB-OS](https://github.com/project-barry/pb-os), our port of Steam OS from the Steam Frame, on a
-microSD card, right on your ARM handheld (AYN Thor, Retroid Pocket 6, Retroid Pocket Nova and Konkr Pocket Fit are currently supported; the AYN Odin 2, Odin 2 Portal and Odin 2 Mini are supported but not tested yet). No computer needed.
+microSD card, right on your ARM handheld (AYN Thor, Retroid Pocket 6, Retroid Pocket Nova and Konkr Pocket Fit are currently supported; the Retroid Pocket Duo, AYN Odin 2, Odin 2 Portal and Odin 2 Mini are supported but not tested yet). No computer needed.
 It can also install PB-OS over PB-OS or ArmadaOS on the handheld's internal storage, and repair a PB-OS
 that stopped starting.
 
@@ -45,6 +45,7 @@ it waits.
 |---|---|
 | Retroid Pocket 6 | Yes |
 | Retroid Pocket Nova | Yes |
+| Retroid Pocket Duo | Yes (app 0.5.0 or newer), but this app hasn't installed PB-OS on one yet |
 | AYN Thor | Yes |
 | KONKR Pocket FIT | Yes |
 | AYN Odin 2 | Yes, but PB-OS hasn't been tested on one yet |
@@ -59,7 +60,7 @@ If yours isn't on the list, see
 The app asks you before each step and never moves on by itself.
 
 1. **Open the app.** It checks that your handheld has a chip PB-OS supports
-   (Snapdragon 8 Gen 2 or 8 Gen 3). If not, it stops here.
+   (Snapdragon 8 Gen 2 or 8 Gen 3, or the Retroid Pocket Duo's). If not, it stops here.
 2. **Put in a microSD card and tap Continue.** The app checks that the card is
    big enough and that your handheld is one we have tested PB-OS on, so nobody
    ends up with a system that doesn't work on their hardware.
@@ -128,6 +129,7 @@ until you pick a fix. It can:
   updater puts back everything the update changed on the next start; your
   games and files stay),
 - point PB-OS's kernel at the right place if it looks in the wrong one,
+- write the boot menu's entry for PB-OS's kernel again if it doesn't match,
 - put the boot menu back if an Android update removed it.
 
 ## Updating the app
@@ -159,22 +161,26 @@ browser or file manager the first time.
 
 ## The boot menu
 
-The boot menu is **OpenABL** (version 1.2), made by the
-[Open Handheld Collective](https://github.com/OpenHandheldCollective/OpenABL);
-ROCKNIX uses it too. Version 1.2 comes from
-[Project Barry's fork](https://github.com/project-barry/OpenABL/releases/tag/v1.2):
-their v1.1 plus a fix for an occasional freeze on the logo at startup. The app
-carries an unchanged copy of it for the Snapdragon 8 Gen 2 and 8 Gen 3, so it
-can install it without another download, and checks it before installing.
-OpenABL is free software under the GNU GPL, version 3 or later; its source code
-is on the [v1.2 release page](https://github.com/project-barry/OpenABL/releases/tag/v1.2)
-(`openabl-v1.2-source.tar.xz`). All credit for OpenABL goes to the Open Handheld
-Collective.
+The boot menu is **OpenABL-PB** 1.2, Project Barry's build of OpenABL by the
+[Open Handheld Collective](https://github.com/OpenHandheldCollective/OpenABL)
+(ROCKNIX uses OpenABL too). It is their version 1.2, changed to support the
+Retroid Pocket Duo's chip, to show its own name, and with the rest of a fix for
+an occasional freeze on the logo at startup. It isn't an upstream release, so
+report problems with it to us, not to them. The app carries an unchanged copy of
+[its release](https://github.com/project-barry/OpenABL/releases/tag/pb-v1.2) for
+each chip, so it can install it without another download, and checks it before
+installing. OpenABL is free software under the GNU GPL, version 3 or later; the
+source code of this build is on the same release page
+(`openabl-pb-v1.2-source.tar.xz`). All credit for OpenABL goes to the Open
+Handheld Collective.
 
-Handhelds set up by app 0.4.1 have OpenABL 1.1; Repair → Reinstall the Boot
-Menu puts 1.2 in its place. Handhelds set up by earlier versions of the app have
-the **ROCKNIX ABL** 1.2 boot menu by the ROCKNIX team. The app still recognizes
-both and offers OpenABL 1.2 in their place.
+Handhelds set up by earlier versions of the app have OpenABL 1.2 (PB-OS fork),
+OpenABL 1.1 or the **ROCKNIX ABL** 1.2 boot menu by the ROCKNIX team. The app
+still recognizes all of them and offers OpenABL-PB 1.2 in their place.
+
+**Retroid Pocket Duo:** the app installs the boot menu only over Retroid's own
+boot loader or a Duo boot menu it knows. There is no tested rescue if a flash
+goes wrong, so it warns you and needs the charger.
 
 ## More detail
 

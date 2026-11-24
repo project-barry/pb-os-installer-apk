@@ -37,6 +37,10 @@ object Devices {
         // Confirmed from getprop on stock Android 13: ro.soc.model QCS8550, ro.board.platform kalama.
         SupportedDevice("Retroid Pocket 6", "RP6", Soc.SM8550, "Moorechip", "Retroid Pocket 6", listOf(PB_OS, "sm8550")),
         SupportedDevice("Retroid Pocket Nova", "Nova", Soc.SM8550, "Moorechip", "Retroid Pocket Nova", listOf(PB_OS, "sm8550")),
+        // getprop on stock Android 16 (1.0.0.157): ro.soc.model CQ7790S, ro.board.platform sun
+        // (the 8 Elite's too, so only the model counts). Only offered images with
+        // Duo support (abl/OpenAblRelease).
+        SupportedDevice("Retroid Pocket Duo", "Duo", Soc.SM7750, "Moorechip", "Retroid Pocket Duo", listOf(PB_OS)),
         // getprop on stock Android 13: ro.soc.model QCS8550, ro.board.platform kalama.
         SupportedDevice("AYN Thor", "Thor", Soc.SM8550, "AYN", "AYN Thor", listOf(PB_OS, "sm8550")),
         // Android calls it AYANEO "Pocket FIT" (getprop on stock Android 14); it reports no
@@ -54,7 +58,10 @@ object Devices {
     /** The ones pb-os has run on. */
     val tested get() = supported.filter { it.hardwareTested }
 
-    /** Image names to try for an untested device, by chip (only with ALLOW_UNTESTED). */
+    /**
+     * Image names to try for an untested device, by chip (only with ALLOW_UNTESTED). Not the
+     * SM7750: its boot menu is for the Duo alone, so nothing else with it could start PB-OS.
+     */
     val imagesBySoc = mapOf(
         Soc.SM8550 to listOf(PB_OS, "sm8550"),
         Soc.SM8650 to listOf(PB_OS, "pocketfit"),

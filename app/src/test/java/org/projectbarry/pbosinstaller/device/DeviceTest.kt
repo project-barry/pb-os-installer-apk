@@ -15,6 +15,23 @@ class DeviceTest {
         assertNull(SocCheck.identify("SM8250", "kona"))
     }
 
+    /** The Duo's platform, sun, is the 8 Elite's too: only the model makes an SM7750. */
+    @Test fun sm7750OnlyByModel() {
+        assertEquals(Soc.SM7750, SocCheck.identify("CQ7790S", "sun"))
+        assertEquals(Soc.SM7750, SocCheck.identify("cq7790s", ""))
+        assertEquals(Soc.SM7750, SocCheck.identify("SM7750", "sun"))
+        assertNull(SocCheck.identify("SM8750", "sun"))
+        assertNull(SocCheck.identify("", "sun"))
+        assertNull(SocCheck.identify("unknown", "sun"))
+        assertNull(SocCheck.identify("SM7735", "sun"))
+        assertNull(SocCheck.identify("CQ8750S", "sun"))
+    }
+
+    /** Untested handhelds never with the Duo's chip, in any build. */
+    @Test fun chipsAndTheirImages() {
+        assertEquals(setOf(Soc.SM8550, Soc.SM8650), Devices.imagesBySoc.keys)
+    }
+
     @Test fun boardPlatformOnlyWhenModelMissing() {
         assertEquals(Soc.SM8550, SocCheck.identify("", "kalama"))
         assertEquals(Soc.SM8650, SocCheck.identify("unknown", "pineapple"))
@@ -48,6 +65,17 @@ class DeviceTest {
         assertEquals("AYN Thor", Devices.find(thor)?.name)
     }
 
+    @Test fun duo() {
+        // Stock Android 16: ro.product.manufacturer Moorechip, ro.soc.model CQ7790S, ro.board.platform sun.
+        val duo = DeviceInfo("Moorechip", "", "Retroid Pocket Duo", "", "", "QTI", "CQ7790S", "sun", "16")
+        assertEquals("Retroid Pocket Duo", Devices.find(duo)?.name)
+        assertEquals("Duo", Devices.find(duo)?.shortName)
+        assertEquals(listOf("pb-os"), Devices.find(duo)?.images)
+        assertNull(Devices.find(duo.copy(socModel = "SM8750")))
+        assertNull(Devices.find(duo.copy(socModel = "")))
+        assertNull(Devices.find(duo.copy(model = "Retroid Pocket 6")))
+    }
+
     @Test fun odin2FamilyIsSupportedNotTested() {
         // Android's maker/model on stock: AYN / Odin2, Odin2 Portal, Odin2 Mini (kalama).
         for ((model, name) in listOf("Odin2" to "AYN Odin 2", "Odin2 Portal" to "AYN Odin 2 Portal", "Odin2 Mini" to "AYN Odin 2 Mini")) {
@@ -59,7 +87,7 @@ class DeviceTest {
     }
 
     @Test fun shortNames() {
-        assertEquals(listOf("RP6", "Nova", "Thor", "KPF"), Devices.tested.map { it.shortName })
+        assertEquals(listOf("RP6", "Nova", "Duo", "Thor", "KPF"), Devices.tested.map { it.shortName })
     }
 
     @Test fun rightModelWrongChipIsNotTested() {

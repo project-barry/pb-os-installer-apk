@@ -18,6 +18,7 @@ inserting a card never moves it on.
 
 ```
 WrongChip                                       (stop)
+NotReady ──[Back]──▶ Card                        (a Duo this app or release can't start yet)
 
 Card ──[Continue]──▶ Untested                    (stop, unless -PallowUntested=true)
   ▲          │
@@ -46,6 +47,9 @@ matters again for writing, which will also wait for the user's go-ahead.
 - Reads `Build.SOC_MODEL` (`ro.soc.model`).
 - `SM8550*` / `QCS8550*` → SM8550 image, `SM8650*` / `QCS8650*` → SM8650 image.
   Retroid reports the QCS name: both the RP6 and the Nova say `QCS8550`.
+- `SM7750*` / `CQ7790*` → SM7750 (the Retroid Pocket Duo says `CQ7790S`). Only by
+  its model, never by its platform: that is `sun`, which the 8 Elite (SM8750) has
+  too. The Duo's boot loader scripts check `ro.soc.model` as well for that reason.
 - Only when the model is empty or `unknown`, `ro.board.platform` decides:
   `kalama` = SM8550, `pineapple` = SM8650.
 - Anything else (for example the 8 Elite edition of the Pocket FIT, SM8750) is
@@ -84,6 +88,7 @@ entry (case ignored) **and** its chip matches the entry's chip.
 |---|---|---|---|
 | Retroid Pocket 6 | SM8550 | `Moorechip` / `Retroid Pocket 6` | `sm8550` |
 | Retroid Pocket Nova | SM8550 | `Moorechip` / `Retroid Pocket Nova` | `sm8550` |
+| Retroid Pocket Duo | SM7750 | `Moorechip` / `Retroid Pocket Duo` | `pb-os` (see [The Retroid Pocket Duo](#the-retroid-pocket-duo)) |
 | AYN Thor | SM8550 | `AYN` / `AYN Thor` | `sm8550` |
 | KONKR Pocket FIT | SM8650 | `AYANEO` / `Pocket FIT` | `pocketfit` |
 | AYN Odin 2 \* | SM8550 | `AYN` / `Odin2` | `pb-os` |
@@ -96,15 +101,46 @@ firmware (odm/vendor `build.prop`; `ro.product.property_source_order` puts
 odm first), not from a device report.
 
 The strings come from `getprop` on each handheld's stock Android (13 on the
-RP6, Nova and Thor, 14 on the Pocket FIT). A future entry can use the
+RP6, Nova and Thor, 14 on the Pocket FIT, 16 on the Duo). A future entry can use the
 placeholder value, which never matches, until a device report fills it in.
 
 ### Untested handhelds
 
 `-PallowUntested=true` (or `allowUntested=true` in `gradle.properties`) sets
-`BuildConfig.ALLOW_UNTESTED`: any SM8550 or SM8650 handheld then gets through,
+`BuildConfig.ALLOW_UNTESTED`: any SM8550 or SM8650 handheld then gets through (never an SM7750 other than the Duo),
 uses the image for its chip, and the offer screen shows an "untested device"
 warning. Builds handed out to people keep it off.
+
+### The Retroid Pocket Duo
+
+[abl/OpenAblRelease.kt](../app/src/main/java/org/projectbarry/pbosinstaller/abl/OpenAblRelease.kt)
+is the one place for **OpenABL-PB**, Project Barry's build of OpenABL: one version for
+every chip (its number is the OpenABL version it is based on), with each chip's size
+and SHA-256 and the first PB-OS release a Duo can start. It's there as a whole or not
+at all. Without it the app installs the earlier fork build on the SM8550 and SM8650
+("OpenABL 1.2 (PB-OS fork)" in the app; its own menu says 1.2) and refuses a Duo
+right after the model check (`NotReady`), so nothing is downloaded, written or backed
+up there. That screen can look for a newer version of the app.
+
+- **Its own file.** Each chip only ever gets the file listed for it. No file means no
+  boot menu step and no boot menu fix in Repair. A handheld with the chip that isn't
+  a Duo is refused too, also in builds that allow untested ones.
+- **Only releases with Duo support.** The app can't look into an image before it
+  downloads it, so it goes by the release's tag: the first one with Duo support or a
+  newer one of the same series. A tag it can't read is refused.
+- **Only over known boot loaders.** Both slots must hold one of the Duo's stock boot
+  loaders (its two slots differ, both are known) or a Duo boot menu; on the other
+  chips too few stock ones are known for that.
+- **The slot in use is written last.** The scripts write the inactive slot
+  (`ro.boot.slot_suffix`) first and read it back; if they can't tell which one that
+  is, nothing is written. They also refuse while an Android update is being
+  installed or waits to switch slots: `update_engine_client --status`, and the slot of
+  the next start from `bootctl get-active-boot-slot` or else from the partition table as
+  the boot loader reads it (`boot_a`/`boot_b`: attribute bit 50 active, bits 48-49
+  priority). Not being able to tell that slot refuses too. The other handhelds keep slot b first.
+- **No known way back from a bad flash** without Retroid's recovery files, so the
+  boot menu steps warn about it and need the charger in (30 % or more), checked
+  by the app and again by the script.
 
 ## 4. Finding and downloading the image
 
@@ -228,7 +264,10 @@ Downloaded ──[Install PB-OS ×5]──▶ InternalWriting ─▶ InternalDon
   ranges, because the kernel keeps Android's view of the partitions until the
   next boot.
   1. Checks first: same disk, table byte-for-byte as the app read it, nothing
-     in the Linux space mounted or held, download and table files intact.
+     in the Linux space mounted or held, download and table files intact, and
+     the image's boot entry starts its `KERNEL` (the image is still packed: its
+     boot partition alone is unpacked into the work folder and mounted
+     read-only; without room for it the check waits until step 3).
   2. The image is unpacked into STORAGE and read back against the signed
      checksum. From here on the old install is gone.
   3. ROCKNIX: FAT32 in the disk's sector size (the image's 512-byte FAT can't
@@ -237,7 +276,11 @@ Downloaded ──[Install PB-OS ×5]──▶ InternalWriting ─▶ InternalDon
      `newfs_msdos` can't: it always takes the loop device's 512-byte sectors
      (seen on the Nova). Then the image's boot files, the
      KERNEL's command line changed to `root=PARTLABEL=STORAGE` (the
-     command line is outside the boot image's checksum).
+     command line is outside the boot image's checksum), and OpenABL's boot
+     entry rewritten for that KERNEL when the image has one (see
+     [The boot entry](#the-boot-entry)). The image's own entry, which starts
+     the card's `root=`, is never copied. An image without an entry installs
+     as before.
   4. Home into HOME (skipped when an existing PB-OS HOME is kept), then the
      system to the start of STORAGE. That copy always
      moves to a lower address, so nothing is overwritten before it's read.
@@ -256,6 +299,60 @@ Downloaded ──[Install PB-OS ×5]──▶ InternalWriting ─▶ InternalDon
   touched: an internal Linux install already has a boot menu (ROCKNIX's
   or OpenABL).
 
+### The boot entry
+
+[BootEntry.kt](../app/src/main/java/org/projectbarry/pbosinstaller/repair/BootEntry.kt),
+`ScriptKit.BOOT_ENTRY` ([ScriptKit.kt](../app/src/main/java/org/projectbarry/pbosinstaller/root/ScriptKit.kt))
+
+Newer PB-OS images carry an OpenABL boot entry (Boot Loader Specification)
+next to `KERNEL` on the boot partition. OpenABL newer than 1.2 starts only the
+entry; 1.2 tries the entry before `KERNEL`. So whatever writes or re-points
+`KERNEL` must rewrite the entry from that same `KERNEL`, or the boot menu
+starts the old kernel or the wrong root. The format is PB-OS's own
+(`pbos-update.py`: `split_kernel_image`, `dtb_file_name`,
+`refresh_boot_entry`), matched byte for byte:
+
+- `KERNEL` is an Android boot image, header v0: its kernel is gzip(Image)
+  with the DTBs appended, then the ramdisk; the command line is bytes
+  64–575 plus 608–1631, each up to its NUL.
+- `pbos/Image-<tag>.gz` (the gzip stream alone) and `pbos/initrd-<tag>.gz`
+  (the ramdisk); `<tag>` is the first 12 hex digits of `KERNEL`'s SHA-256.
+- `dtbs/qcom/<first root compatible>.dtb` per DTB (lowercased, every run of
+  characters outside a–z0–9 a `-`); a repeated name gets `-2`, `-3`… in
+  `KERNEL` order (the RP6 and its TOP-DPAD variant share one). A DTB is only
+  rewritten when its bytes differ.
+- `loader/entries/pbos.conf`: `title PB-OS`, `sort-key pbos`,
+  `architecture aa64`, `linux /pbos/Image-<tag>.gz`,
+  `initrd /pbos/initrd-<tag>.gz`, `options <command line>`.
+
+**Order** (power cut safe): the kernel and initrd under the new tag, then the
+DTBs, then `pbos.conf` (the switch), each written as `<name>.new`, flushed and
+renamed over; a flush; then the leftovers go: other files in `pbos/`, `*.dtb`
+in `dtbs/qcom/` this `KERNEL` doesn't have, and `*.new` files there. Nothing
+else on the partition is touched (Android's `FSCK0000.000` stays). The pieces
+are checked against `KERNEL` before anything is written, and everything is
+read back after.
+
+- **Internal install:** re-pointing changes only the command line, so the
+  image's entry (checked first: it must start the image's `KERNEL` exactly)
+  gives the kernel, initrd and DTBs; the job writes them under the
+  re-pointed `KERNEL`'s tag with its command line, then reads the entry back
+  from the disk (`options` with `root=PARTLABEL=STORAGE`).
+- **Repair:** the app splits the kernel it checked
+  ([BootEntry.split](../app/src/main/java/org/projectbarry/pbosinstaller/repair/BootEntry.kt)) and hands
+  the pieces to the job; the job takes the tag and command line from the
+  `KERNEL` it put in place. Where the boot partition has an entry, every
+  kernel fix (re-point, undo update, undo repair) writes it after the
+  `KERNEL`; `KERNEL.bad` / `KERNEL.before-undo` stay kernel files only. A
+  kernel that can't start from an entry (no EFI stub, DTBs, initrd or
+  `root=`) is refused there before anything changes, and the check doesn't
+  offer a fix with one. An install without an entry stays without one.
+- **Repair check:** copies `pbos.conf` and the SHA-256 of every file in
+  `pbos/` and `dtbs/qcom/`; the entry must start exactly the `KERNEL`
+  (text, tag, kernel, initrd, DTBs). No entry is a note (images from before
+  it); a mismatch is a problem, fixed by **Write the Boot Entry Again**
+  (entry only, the kernel stays) or by the kernel fix when root= is wrong too.
+
 ### Dry run on a handheld
 
 `InternalDryRunTest` writes `app/build/internal-dry-run/`: a 60 GiB fake disk
@@ -271,6 +368,47 @@ dd if=$D/disk-tail.bin of=$D/disk.img bs=1048576 seek=61439 conv=notrunc
 sed -i "s|SEVENZIP_PATH|<app lib dir>/lib7zzs.so|; s|IMAGE_DIR|<folder with the parts>|" $D/install.sh
 sh $D/install.sh; cat $D/status
 ```
+
+### The boot loader steps
+
+[abl/AblScript.kt](../app/src/main/java/org/projectbarry/pbosinstaller/abl/AblScript.kt),
+[abl/AblSetup.kt](../app/src/main/java/org/projectbarry/pbosinstaller/abl/AblSetup.kt)
+
+- **Back up:** both slots into a new folder each time (`files/abl-backup/<date>/`),
+  each copy compared with its slot read again from the storage.
+- **Install:** both slots must still match that backup. Slot by slot: written,
+  flushed, caches dropped, read back. If a slot doesn't read back, the original goes
+  in and is read back too; the app says it is back only then. If it isn't, the app
+  says not to turn the handheld off.
+- **The note:** before the first byte, `files/abl-flash/journal` (and root's own copy
+  in `/data/local/tmp/pbos-abl-work`, with the backup) says where the original is, its
+  checksums, what is being written, and on which handheld: a random number root made up
+  there (`/data/local/tmp/pbos-abl-id`), nothing personal. The app's data never moves to
+  another handheld (`data_extraction_rules.xml`), and an app's note with another number
+  is never acted on; root's own note always is this handheld's. It goes once both slots were read back as whole. While
+  it's there, no backup is made (a slot may be half written).
+- **After an interruption** the app first looks at both slots (`abl-check`, writes to
+  neither). Each is its original, the boot menu, another known boot loader, half written
+  (every 4096-byte block is the original's or the boot menu's), newer (an ELF file that
+  differs all over, with none of the boot menu's blocks), or something else. Whole slots
+  only lose the note. **Put Original Back** and **Finish Installing** write only when
+  both slots are the original's and the boot menu's blocks and nothing else; anything
+  newer is left alone, and ends the install once the handheld has started from that slot
+  (which shows it's whole; if both are newer, root keeps its copies of the originals in
+  `pbos-abl-work.kept`). A half-written slot is written first, and a whole one never
+  while another isn't. The steps stop at the first slot that can't be put back. A
+  half-written slot keeps its screen and its warning through every failure until it's
+  resolved, and nothing there asks for a restart; on the Duo only an update that Android
+  is writing right now holds Put Original Back up. Where the app can't go on, the screen
+  names the folder with the backup. Tools and the app's update stay reachable. A note that can't be read goes when both slots are known
+  or match a backup.
+- A copy that no longer has the noted checksum is never written, and finishing writes
+  over a slot that's still the original only with a good copy of it.
+- **One at a time:** `flock` on a file in `/data/local/tmp` (the kernel lets go when the
+  script ends; a hard link with its owner's number in it where there's no flock). Each start runs from a copy of its own,
+  and the saved script goes once it was started, so a launcher run again does nothing.
+  The status file stays fresh while the storage is being flushed; one that's old, or stays
+  in the future, is of a script that stopped.
 
 ## 7. Device reports
 

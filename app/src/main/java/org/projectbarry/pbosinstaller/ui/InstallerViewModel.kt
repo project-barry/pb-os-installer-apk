@@ -12,6 +12,7 @@ import kotlinx.coroutines.withContext
 import org.projectbarry.pbosinstaller.BuildConfig
 import org.projectbarry.pbosinstaller.device.DeviceInfo
 import org.projectbarry.pbosinstaller.device.Devices
+import org.projectbarry.pbosinstaller.device.Soc
 import org.projectbarry.pbosinstaller.device.SupportedDevice
 import org.projectbarry.pbosinstaller.release.ImageDownloader
 import org.projectbarry.pbosinstaller.release.ImageRelease
@@ -20,15 +21,18 @@ import org.projectbarry.pbosinstaller.release.UpdateRelease
 import org.projectbarry.pbosinstaller.release.Updates
 import org.projectbarry.pbosinstaller.root.FirstUpdate
 import org.projectbarry.pbosinstaller.root.RootJobs
+import org.projectbarry.pbosinstaller.root.StaleWatch
 import org.projectbarry.pbosinstaller.report.DeviceReport
 import org.projectbarry.pbosinstaller.report.ReportSender
 import org.projectbarry.pbosinstaller.storage.SdBlock
 import org.projectbarry.pbosinstaller.storage.SdCard
 import org.projectbarry.pbosinstaller.storage.SdCardWatcher
 import org.projectbarry.pbosinstaller.writer.CardWriter
+import org.projectbarry.pbosinstaller.abl.AblCatalog
 import org.projectbarry.pbosinstaller.abl.AblKnown
 import org.projectbarry.pbosinstaller.abl.AblScript
 import org.projectbarry.pbosinstaller.abl.AblSetup
+import org.projectbarry.pbosinstaller.abl.PowerCheck
 import org.projectbarry.pbosinstaller.internal.InternalInstaller
 import org.projectbarry.pbosinstaller.internal.InternalLayout
 import org.projectbarry.pbosinstaller.internal.InternalScript
@@ -50,6 +54,11 @@ sealed interface Step {
     /** Waiting for the user to insert a card and tap Continue. */
     data object Card : Step
     data object Untested : Step
+    /**
+     * Supported, but this version of the app or the newest release can't do it yet; [reason] says
+     * why. [update]: a newer app may, so it can be looked for; [looked]: what that found.
+     */
+    data class NotReady(val reason: String, val update: Boolean = true, val looked: String? = null) : Step
     /** Model checked; waiting for the user to tap "Let's Go!" (looks up the release). */
     data class Ready(val images: List<String>) : Step
     data object LoadingRelease : Step
@@ -83,8 +92,20 @@ sealed interface Step {
     data class AblWorking(val job: String) : Step
     /** Backed up; [slotA]/[slotB] say what each slot holds. Waiting for the 5-tap confirm. */
     data class AblBackedUp(val slotA: String, val slotB: String, val documents: String?) : Step
-    /** Waiting for "Install Boot Menu". */
-    data object AblInstallReady : Step
+    /** Waiting for "Install Boot Menu"; [problem]: what has to be done before it (the Duo's charger). */
+    data class AblInstallReady(val problem: String? = null) : Step
+    /**
+     * A boot menu install started writing and didn't finish. [slots]: what the check found, null
+     * before it: half (a slot is half written), mixed (whole, but not the same), newer (an
+     * Android update since), other. [menu]: the app can finish it with that boot menu.
+     * [backup]: the folder in Documents with the boot loader from before.
+     */
+    data class AblInterrupted(
+        val menu: String?, val slots: String? = null, val message: String? = null, val looked: String? = null,
+        val backup: String? = null,
+    ) : Step
+    /** The unfinished install is over: nothing was left to do, or the original is back; [message] says which. */
+    data class AblEnded(val message: String) : Step
     data object BootMenuDone : Step
     /** Internal storage: the read-only check is running. */
     data object InternalChecking : Step
@@ -136,13 +157,17 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
     val handheld: String = tested?.shortName ?: "handheld"
     /** True when this build lets untested devices through (gradle -PallowUntested=true). */
     val untestedAllowed = BuildConfig.ALLOW_UNTESTED
+    /** Why the boot loader can't be replaced on this handheld, or null. */
+    private val bootMenuRefusal: String? = info.soc?.let { AblCatalog.current.refusal(it, tested != null) }
+    /** The boot menu the app installs on this handheld ("OpenABL-PB 1.2"), or null for none. */
+    val bundledMenu: String? = info.soc?.takeIf { bootMenuRefusal == null }?.let { AblCatalog.current.bundled(it) }
 
     private val watcher = SdCardWatcher(app)
     val card: StateFlow<SdCard?> = watcher.card
     private val downloader = ImageDownloader(app)
     private val updateDownloader = ImageDownloader(app, "updates")
     private val appUpdater = org.projectbarry.pbosinstaller.update.AppUpdate.Updater(app)
-    private val repairer = info.soc?.let { org.projectbarry.pbosinstaller.repair.Repairer(app, it) }
+    private val repairer = info.soc?.let { org.projectbarry.pbosinstaller.repair.Repairer(app, it, bundledMenu) }
     /** The Tools screen replaces the install steps while open; the install keeps its place. */
     private val _tools = MutableStateFlow(false)
     val tools: StateFlow<Boolean> = _tools
@@ -199,17 +224,64 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
     val step: StateFlow<Step> = _step
     private var job: Job? = null
 
+    private val abl: AblSetup? = info.soc?.let { AblSetup(app, info, it, tested?.name ?: "${info.manufacturer} ${info.model}") }
+    private var ablWatch: Job? = null
+    private var ablStart: Job? = null
+    /** What the last look at the slots of an unfinished install found; a failure in between doesn't forget it. */
+    private var lastSlots: String? = null
+
     init {
         watchAppUpdate()
         if (info.soc != null) {
             watcher.start()
             viewModelScope.launch { watcher.card.collect { onCard(it) } }
-            resumeWrite()
+            // A card or internal write that still runs comes first; the boot menu's turn is after it.
+            if (!resumeWrite()) resumeAbl()
+        }
+    }
+
+    /**
+     * A boot loader step from before the app was closed: still running, finished since, or
+     * cut off. A job that never ran is dropped, so a launcher left in Downloads does nothing.
+     */
+    private fun resumeAbl(): Boolean {
+        val setup = abl ?: return false
+        for (job in listOf(AblScript.RESTORE, AblScript.INSTALL, AblScript.CHECK, AblScript.BACKUP)) {
+            if (!setup.pending(job)) continue
+            val status = setup.status(job)
+            if (status == null) {
+                setup.drop(job)
+            } else {
+                // Finished or cut off: the watch shows that at once.
+                _step.value = Step.AblWorking(job)
+                watchAbl(setup, job, if (job == AblScript.INSTALL) Step.AblInstallReady() else Step.BootMenu)
+                return true
+            }
+        }
+        if (setup.interrupted) showInterrupted(setup)
+        return setup.interrupted
+    }
+
+    private fun interruptedStep(setup: AblSetup, message: String? = null, slots: String? = lastSlots): Step.AblInterrupted {
+        lastSlots = slots
+        return Step.AblInterrupted(setup.interruptedMenu.takeIf { bootMenuRefusal == null }, slots, message, backup = setup.interruptedBackup)
+    }
+
+    private fun ablEnded(message: String): Step {
+        lastSlots = null
+        return Step.AblEnded(message)
+    }
+
+    /** The unfinished install's screen; what the slots hold is looked at right away where the app can do that itself (it only reads). */
+    private fun showInterrupted(setup: AblSetup) {
+        _step.value = interruptedStep(setup)
+        viewModelScope.launch {
+            if (withContext(Dispatchers.IO) { setup.startsItself } && _step.value is Step.AblInterrupted) checkBootLoader()
         }
     }
 
     /** A write still running from before the app was closed: show it again. */
-    private fun resumeWrite() {
+    private fun resumeWrite(): Boolean {
         internal.currentTag?.let { tag ->
             val status = internal.status()
             if (status == null || status.state in FINISHED) {
@@ -218,17 +290,18 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
                 target = Target.Internal
                 _step.value = Step.InternalWriting(tag, status.state, status.done, status.total)
                 watchInternal(tag, back = Step.Card)
-                return
+                return true
             }
         }
-        val tag = writer.currentTag ?: return
-        val status = writer.status() ?: return
+        val tag = writer.currentTag ?: return false
+        val status = writer.status() ?: return false
         if (status.state == "done" || status.state == "failed") {
             writer.clear()
-            return
+            return false
         }
         _step.value = Step.Writing(tag, status.state, status.done, status.total)
         watchWrite(tag, back = Step.Card)
+        return true
     }
 
     /** Taking the card out goes back to the card step; putting one in never moves on by itself. */
@@ -248,11 +321,14 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
         _step.value = modelChecked()
     }
 
-    /** The model check (local): Ready for a tested handheld, Untested otherwise. */
-    private fun modelChecked(): Step = when {
-        tested != null -> Step.Ready(tested.images)
-        untestedAllowed -> Step.Ready(Devices.imagesBySoc.getValue(info.soc!!))
-        else -> Step.Untested
+    /** The model check (local): Ready for a tested handheld, NotReady for a Duo without its boot menu, Untested otherwise. */
+    private fun modelChecked(): Step {
+        val images = when {
+            tested != null -> tested.images
+            untestedAllowed -> info.soc?.let { Devices.imagesBySoc[it] } ?: return Step.Untested
+            else -> return Step.Untested
+        }
+        return AblCatalog.current.notReady(info.soc)?.let { Step.NotReady(it) } ?: Step.Ready(images)
     }
 
     /** "Install Over Linux on Internal Storage": reads the internal partition table as root (changes nothing). */
@@ -362,7 +438,14 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
         job = viewModelScope.launch {
             _step.value = try {
                 withContext(Dispatchers.IO) {
-                    val (_, release) = Releases.fetchLatest(BuildConfig.RELEASES_REPO)
+                    val (tag, release) = Releases.fetchLatest(BuildConfig.RELEASES_REPO)
+                    if (!AblCatalog.current.startsOn(info.soc, tag)) {
+                        return@withContext Step.NotReady(
+                            "The newest PB-OS release ($tag) doesn't support the $fullName yet. Nothing was downloaded. " +
+                                "Try again when a newer release is out.",
+                            update = false, // Looked up with the release.
+                        )
+                    }
                     val image = Releases.pickImage(release, ready.images)
                         ?: return@withContext Step.Failed("The newest PB-OS release has no image for this device yet.", ready)
                     // The newest patch goes on too, so PB-OS doesn't have to update right away.
@@ -552,20 +635,55 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
         const val STALE_MS = 60_000L
     }
 
-    private val abl: AblSetup? = info.soc?.let { AblSetup(app, info, it, tested?.name ?: "${info.manufacturer} ${info.model}") }
-    private var ablWatch: Job? = null
-
     /** "Set Up Boot Menu" after the card is written. */
-    fun openBootMenu() { _step.value = Step.BootMenu }
+    fun openBootMenu() {
+        val setup = abl
+        if (setup != null && setup.interrupted) return showInterrupted(setup)
+        _step.value = bootMenuRefusal?.let { Step.NotReady(it) } ?: Step.BootMenu
+    }
 
     /** "Back Up Boot Loader": copies both ABL slots (changes nothing). */
     fun backUpBootLoader() = runAbl(AblScript.BACKUP, Step.BootMenu) { it.prepareBackup() }
 
     /** The 5-tap confirm after the backup was saved somewhere else. */
-    fun backupConfirmed() { _step.value = Step.AblInstallReady }
+    fun backupConfirmed() { _step.value = Step.AblInstallReady() }
 
     /** "Install Boot Menu". */
-    fun installBootMenu() = runAbl(AblScript.INSTALL, Step.AblInstallReady) { it.prepareInstall() }
+    fun installBootMenu() {
+        powerProblem()?.let {
+            _step.value = Step.AblInstallReady(it)
+            return
+        }
+        runAbl(AblScript.INSTALL, Step.AblInstallReady()) { it.prepareInstall() }
+    }
+
+    /** On the Duo, the charger must be in and the battery not low; null: go on. Other handhelds: always null. */
+    private fun powerProblem(): String? {
+        if (info.soc != Soc.SM7750) return null
+        val i = getApplication<Application>().registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+        val level = i?.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1) ?: -1
+        val scale = i?.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1) ?: -1
+        return PowerCheck.problem(
+            plugged = (i?.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) ?: 0) != 0,
+            percent = if (level >= 0 && scale > 0) level * 100 / scale else null,
+        )
+    }
+
+    /** "Check Again" after an install that didn't finish: what the slots hold. */
+    fun checkBootLoader() = runAbl(AblScript.CHECK, Step.BootMenu) { it.prepareCheck() }
+
+    /** "Finish Installing" after an install that didn't finish. */
+    fun finishBootMenu() {
+        val step = _step.value
+        powerProblem()?.let {
+            if (step is Step.AblInterrupted) _step.value = step.copy(message = it)
+            return
+        }
+        runAbl(AblScript.INSTALL, Step.BootMenu) { it.prepareInstall(finish = true) }
+    }
+
+    /** "Put Original Back" after an install that didn't finish. */
+    fun restoreBootLoader() = runAbl(AblScript.RESTORE, Step.BootMenu) { it.prepareRestore() }
 
     fun saveBackupZip(uri: android.net.Uri, onDone: (Boolean) -> Unit) {
         val setup = abl ?: return
@@ -578,49 +696,92 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun runAbl(job: String, back: Step, prepare: (AblSetup) -> String?) {
         val setup = abl ?: return
-        viewModelScope.launch {
+        // Looking and putting the original back never depend on what this version can install.
+        if (bootMenuRefusal != null && job != AblScript.RESTORE && job != AblScript.CHECK) {
+            _step.value = Step.NotReady(bootMenuRefusal)
+            return
+        }
+        // One at a time: a second tap while the first is still being prepared does nothing.
+        if (ablStart?.isActive == true || _step.value is Step.AblWorking) return
+        ablStart = viewModelScope.launch {
             _step.value = try {
                 val launcher = withContext(Dispatchers.IO) { prepare(setup) }
-                watchAbl(setup, job, back)
-                when {
+                val next = when {
                     launcher != null -> Step.AblRunScript(job, launcher)
                     withContext(Dispatchers.IO) { setup.start(job) } -> Step.AblWorking(job)
                     else -> withContext(Dispatchers.IO) { setup.fallbackLauncher(job) }?.let { Step.AblRunScript(job, it) }
-                        ?: Step.Failed("Couldn't start the boot loader step as root.", back)
+                        ?: ablFailed(setup, "Couldn't start the boot loader step as root.", back)
                 }
+                // Followed only once its step shows: a job that's already done would be overwritten by "working".
+                if (next is Step.AblRunScript || next is Step.AblWorking) {
+                    _step.value = next
+                    watchAbl(setup, job, back)
+                    return@launch
+                }
+                next
             } catch (e: Exception) {
-                Step.Failed("Couldn't prepare the boot loader step (${e.message}).", back)
+                ablFailed(setup, "Couldn't prepare the boot loader step (${e.message}).", back)
             }
         }
     }
 
+    /** With an install half done, every failure leads back to finishing it or putting the original back. */
+    private fun ablFailed(setup: AblSetup, message: String, back: Step): Step =
+        if (setup.interrupted || lastSlots != null) interruptedStep(setup, message) else Step.Failed(message, back)
+
     private fun watchAbl(setup: AblSetup, job: String, back: Step) {
         ablWatch?.cancel()
         ablWatch = viewModelScope.launch {
+            val stale = StaleWatch(STALE_MS)
             while (true) {
                 val status = withContext(Dispatchers.IO) { setup.status(job) }
-                if (status != null && status.state !in FINISHED && status.ageMs > STALE_MS) {
-                    _step.value = Step.Failed("The boot loader step stopped before it finished. Nothing more was changed; try again.", back)
+                if (status != null && status.state !in FINISHED && stale.stopped(status.ageMs)) {
                     setup.clear(job)
+                    _step.value = ablFailed(setup, "The boot loader step stopped before it finished. Nothing more was changed.", back)
+                    // What the slots hold now is looked at before anything is said about them.
+                    if (setup.interrupted && job != AblScript.CHECK) showInterrupted(setup)
                     return@launch
                 }
                 when (status?.state) {
                     null -> {}
                     "done" -> {
                         setup.clear(job)
-                        _step.value = if (job == AblScript.BACKUP) {
+                        _step.value = if (status.values["result"] != null) {
+                            ablResult(setup, status.values["result"].orEmpty())
+                        } else if (job == AblScript.BACKUP) {
                             val a = status.values["slot_a"].orEmpty()
                             val b = status.values["slot_b"].orEmpty()
                             val documents = withContext(Dispatchers.IO) { runCatching { setup.copyToDocuments() }.getOrNull() }
-                            if (AblKnown.alreadyInstalled(a, b)) Step.BootMenuDone else Step.AblBackedUp(a, b, documents)
+                            val unknown = listOf("A" to a, "B" to b).filter { (_, what) -> what == "unknown" || what.isEmpty() }.map { it.first }
+                            when {
+                                AblKnown.alreadyInstalled(a, b, bundledMenu) -> Step.BootMenuDone
+                                info.soc?.let { AblCatalog.current.strict(it) } == true && unknown.isNotEmpty() -> Step.NotReady(
+                                    "Slot ${unknown.joinToString(" and ")} has a boot loader this app doesn't know, so it isn't replaced on the " +
+                                        "$fullName. Nothing was changed." + (documents?.let { " A copy is in $it." } ?: "") +
+                                        " Please tell us on Discord which firmware you have."
+                                )
+                                else -> Step.AblBackedUp(a, b, documents)
+                            }
                         } else {
-                            Step.BootMenuDone
+                            Step.BootMenuDone.also { lastSlots = null }
                         }
                         return@launch
                     }
                     "failed" -> {
                         setup.clear(job)
-                        _step.value = Step.Failed(status.message.ifBlank { "The boot loader step failed." }, back)
+                        val message = status.message.ifBlank { "The boot loader step failed." }
+                        // Both originals are back and the notes are gone: an earlier look at the slots no longer counts.
+                        if (status.values["undone"] == "1") lastSlots = null
+                        // Root's own note outlives the app's data: an install from before they were cleared.
+                        _step.value = when {
+                            status.values["unfinished"] == "0" -> ablEnded("There is no unfinished boot menu install any more.")
+                            // Written to and not put back: that's known without looking again.
+                            status.values["restore"] == "failed" -> interruptedStep(setup, message, slots = "half")
+                            status.values["result"] != null -> interruptedStep(setup, message, slots = status.values["result"])
+                            status.values["unfinished"] == "1" || job == AblScript.RESTORE || job == AblScript.CHECK -> interruptedStep(setup, message)
+                            else -> ablFailed(setup, message, back)
+                        }
+                        if (status.values["unfinished"] == "1") showInterrupted(setup)
                         return@launch
                     }
                     else -> if (_step.value is Step.AblRunScript) _step.value = Step.AblWorking(job)
@@ -628,6 +789,44 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
                 kotlinx.coroutines.delay(1000)
             }
         }
+    }
+
+    /** "Look for an App Update" where this version can't go on: goes online, like "Let's Go!", only on this tap. */
+    fun lookForAppUpdate() {
+        val step = _step.value
+        if (step !is Step.NotReady && step !is Step.AblInterrupted || job?.isActive == true) return
+        job = viewModelScope.launch {
+            val found = withContext(Dispatchers.IO) {
+                runCatching { org.projectbarry.pbosinstaller.update.AppUpdate.findNewer(BuildConfig.VERSION_NAME) }
+            }
+            val newer = found.getOrNull()
+            if (newer != null && _appUpdate.value == null) _appUpdate.value = AppUpdateState.Available(newer)
+            val looked = when {
+                found.isFailure -> "Couldn't reach GitHub to look for a newer app. Check Wi-Fi and try again."
+                newer == null -> "This is the newest version of the app."
+                else -> "A newer version of the app is out: update it above, then open the app again."
+            }
+            when (val now = _step.value) {
+                is Step.NotReady -> _step.value = now.copy(looked = looked)
+                is Step.AblInterrupted -> _step.value = now.copy(looked = looked)
+                else -> {}
+            }
+        }
+    }
+
+    /** How an unfinished install stands, from the check, the restore or finishing it. */
+    private fun ablResult(setup: AblSetup, result: String): Step = when (result) {
+        "original" -> ablEnded("Both slots hold the original boot loader, read back from the storage. Your $handheld starts as before the install.")
+        "menu" -> Step.BootMenuDone.also { lastSlots = null }
+        "changed" -> ablEnded(
+            "The boot loader changed since the install that didn't finish, for example by an Android update, so the app left it " +
+                "alone. Nothing was written. To install the boot menu, start again with the backup."
+        )
+        "damaged" -> ablEnded(
+            "The note about the install couldn't be read, but both slots hold boot loaders the app knows or has a backup of. Nothing was written."
+        )
+        "foreign" -> ablEnded("The app's data came from another handheld with an unfinished install. Nothing was begun on this one, and nothing was written.")
+        else -> interruptedStep(setup, slots = result)
     }
 
     /** "Update App": downloads and checks the new version, then hands it to Android's installer. */
@@ -698,6 +897,10 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** A boot menu install that didn't finish: the app's note, or root's where the app's data was cleared. */
+    private fun ablUnfinished(): Boolean = abl?.interrupted == true || lastSlots != null ||
+        (_repair.value as? RepairState.Report)?.report?.bootMenu?.any { "didn't finish" in it.text } == true
+
     /** A fix from the report; the boot menu goes through the installer's own steps. */
     fun applyFix(fix: org.projectbarry.pbosinstaller.repair.RepairReport.Fix) {
         val r = repairer ?: return
@@ -710,24 +913,42 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
                     _repair.value = RepairState.Failed("The installer is busy. Let it finish, then try again.")
                     return
                 }
+                // An install that didn't finish comes first.
+                val unfinished = ablUnfinished()
+                if (bootMenuRefusal != null && !unfinished) {
+                    _repair.value = RepairState.Failed(bootMenuRefusal)
+                    return
+                }
                 _tools.value = false
                 _repair.value = RepairState.Menu
-                _step.value = Step.BootMenu
+                val setup = abl
+                if (unfinished && setup != null) showInterrupted(setup) else openBootMenu()
             }
             is org.projectbarry.pbosinstaller.repair.RepairReport.Fix.UndoUpdate,
             is org.projectbarry.pbosinstaller.repair.RepairReport.Fix.Repoint,
-            is org.projectbarry.pbosinstaller.repair.RepairReport.Fix.Undo -> {
+            is org.projectbarry.pbosinstaller.repair.RepairReport.Fix.Undo,
+            is org.projectbarry.pbosinstaller.repair.RepairReport.Fix.Entry -> {
                 val (install, kernel) = when (fix) {
                     is org.projectbarry.pbosinstaller.repair.RepairReport.Fix.UndoUpdate -> fix.install to fix.kernel
                     is org.projectbarry.pbosinstaller.repair.RepairReport.Fix.Repoint -> fix.install to fix.kernel
                     is org.projectbarry.pbosinstaller.repair.RepairReport.Fix.Undo -> fix.install to fix.kernel
+                    is org.projectbarry.pbosinstaller.repair.RepairReport.Fix.Entry -> fix.install to fix.kernel
                     else -> return
+                }
+                // These end with a restart, which waits until the boot loader slots are whole.
+                if (ablUnfinished()) {
+                    _repair.value = RepairState.Failed("A boot menu install didn't finish. Finish it or put the original back first.")
+                    return
                 }
                 _repair.value = RepairState.Fixing(fix)
                 val undo = (fix as? org.projectbarry.pbosinstaller.repair.RepairReport.Fix.UndoUpdate)?.update
-                runRepairJob(org.projectbarry.pbosinstaller.repair.RepairScript.KERNEL, RepairState.Fixing(fix), { r.prepareKernel(install, kernel, undo?.id) }) {
+                val entryOnly = fix is org.projectbarry.pbosinstaller.repair.RepairReport.Fix.Entry
+                runRepairJob(org.projectbarry.pbosinstaller.repair.RepairScript.KERNEL, RepairState.Fixing(fix), { r.prepareKernel(install, kernel, undo?.id, entryOnly) }) {
                     RepairState.Fixed(
-                        if (undo != null) {
+                        if (entryOnly) {
+                            "Done: the boot menu's entry of ${install.title.substringBefore(" (")} starts its kernel again. " +
+                                "Restart into PB-OS to try it."
+                        } else if (undo != null) {
                             "Done: on its next start, PB-OS's updater undoes ${undo.version ?: "the update"} and restarts once " +
                                 "more. Start PB-OS now; don't turn it off while it shows it is restoring the previous version."
                         } else {

@@ -13,8 +13,8 @@ licence texts are in `LICENSES/`. Everything written for OpenABL is
 GPL-3.0-or-later, with two differences:
 
 - `Abl/`: the files and our changes in `openabl.patch` are built into
-  Qualcomm's LinuxLoader. On SM4450, SM6450, SM7675, SM8550, SM8650 and
-  SM8750 it links BoringSSL code under the OpenSSL and SSLeay licences, which
+  Qualcomm's LinuxLoader. On SM4450, SM6450, SM7675, SM7750, SM8550, SM8650
+  and SM8750 it links BoringSSL code under the OpenSSL and SSLeay licences, which
   the GPL alone doesn't allow, so these add the permission in
   `LICENSES/GPL-3.0-linking-source-exception.txt`. It allows that combination
   only and still requires its source. The edk2 changes the patch backports

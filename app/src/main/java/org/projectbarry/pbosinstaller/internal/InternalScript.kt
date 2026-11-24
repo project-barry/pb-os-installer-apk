@@ -1,5 +1,6 @@
 package org.projectbarry.pbosinstaller.internal
 
+import org.projectbarry.pbosinstaller.repair.BootEntry
 import org.projectbarry.pbosinstaller.root.FirstUpdate
 import org.projectbarry.pbosinstaller.root.ScriptKit
 
@@ -16,7 +17,8 @@ import org.projectbarry.pbosinstaller.root.ScriptKit
  * byte ranges instead (the kernel keeps its old view of the partitions until
  * the next boot). Steps:
  *  1. checks: the table is still exactly what the app read, nothing in the
- *     Linux space is in use, the download is intact, the image fits;
+ *     Linux space is in use, the download is intact, the image fits, its boot
+ *     entry (if any) starts its KERNEL;
  *  2. the image is unpacked into STORAGE and read back against the signed
  *     checksum (from here on the old install is gone);
  *  3. ROCKNIX is formatted (FAT32 in the disk's own sector size, by the image's
@@ -249,6 +251,7 @@ restore_vm() {
 trap 'unmount_all; restore_vm; clean_work; on_exit' EXIT
 echo 16777216 > ${'$'}VM/dirty_background_bytes
 echo 67108864 > ${'$'}VM/dirty_bytes
+$PRE_CHECK_BLOCK
 
 # From here on the old Linux install is overwritten.
 loop STAGE ${'$'}ST_OFF ${'$'}ST_LEN || fail "Couldn't open internal storage. Nothing was changed."
@@ -291,6 +294,8 @@ dd if=/dev/zero of="${'$'}RK" bs=1048576 count=8 2>/dev/null
   [ "${'$'}(od -A n -t u2 -j 11 -N 2 "${'$'}RK" | tr -d ' ')" = "${'$'}WANT_SS" ] || fail "Couldn't format the ROCKNIX partition."
 mnt "${'$'}RK" "${'$'}WORK/boot" rw vfat || fail "Couldn't mount the new ROCKNIX partition."
 for f in "${'$'}WORK"/src/*; do
+  # Not the image's boot entry: it starts the card's root=. The new one is written below.
+  case "${'$'}{f##*/}" in loader|${BootEntry.DIR}) [ -f "${'$'}WORK/src/${BootEntry.CONF}" ] && continue ;; esac
   cp -r "${'$'}f" "${'$'}WORK/boot/" || fail "Couldn't copy the boot files."
 done
 K="${'$'}WORK/boot/KERNEL"
@@ -300,9 +305,7 @@ retarget_kernel "${'$'}K" PARTLABEL=STORAGE || fail "The image's KERNEL couldn't
 rest() { { head -c 64 "${'$'}1"; tail -c +577 "${'$'}1"; } | sha256sum | cut -d' ' -f1; }
 [ "${'$'}(rest "${'$'}K")" = "${'$'}(rest "${'$'}WORK/src/KERNEL")" ] || fail "The KERNEL didn't read back correctly."
 (cd "${'$'}WORK/boot" && md5sum KERNEL > KERNEL.md5) || fail "Couldn't write KERNEL.md5."
-printf '%s\n' "PB-OS on internal storage, installed by the PB-OS Installer app." \
-  "The boot menu reads KERNEL from this partition. Do not rename it." \
-  "root=PARTLABEL=STORAGE" > "${'$'}WORK/boot/README.txt"
+$BOOT_ENTRY_BLOCK
 sync
 unmount_all
 
@@ -341,6 +344,80 @@ status done
 """.trimStart()
     }
 
+    /**
+     * Before anything is written: an image whose own boot entry doesn't start its
+     * KERNEL is refused. The image is still packed, so only its start (the partition
+     * table and the boot partition) is unpacked, into the work folder. When that
+     * isn't possible (no room on Android's storage, it doesn't mount) the install
+     * goes on: [BOOT_ENTRY_BLOCK] checks again, once the image is in STORAGE.
+     */
+    private val PRE_CHECK_BLOCK = """
+${ScriptKit.BOOT_ENTRY}
+PRE="§WORK/pre.img"
+pre_unpack() { # bytes file: the image's first bytes
+  "§SEVENZIP" e -so -bd "§PART1" 2>/dev/null | head -c "§1" > "§2"
+  [ "§(be_size "§2")" = "§1" ]
+}
+pre_open() { # the image's boot partition on §WORK/pre, or not at all
+  pre_unpack 512 "§PRE" && [ "§(u8 "§PRE" 510)§(u8 "§PRE" 511)" = 55aa ] || return 1
+  PRE_OFF=§(expr "§(u32 "§PRE" 454)" '*' 512)
+  PRE_LEN=§(expr "§(u32 "§PRE" 458)" '*' 512)
+  PRE_END=§(expr "§PRE_OFF" + "§PRE_LEN")
+  ge "§PRE_OFF" 512 && ge "§PRE_LEN" 1048576 && ge 2147483648 "§PRE_END" || return 1
+  PRE_FREE=§(df -k "§WORK" 2>/dev/null | tail -n 1 | tr -s ' ' | cut -d' ' -f4)
+  case "§PRE_FREE" in ''|*[!0-9]*) return 1 ;; esac
+  ge "§PRE_FREE" §(expr "§PRE_END" / 1024 + 262144) || return 1
+  pre_unpack "§PRE_END" "§PRE" || return 1
+  l=§(losetup -f -s -r -o "§PRE_OFF" -S "§PRE_LEN" "§PRE") || return 1
+  LOOPS="§l §LOOPS"
+  mnt "§l" "§WORK/pre" ro vfat
+}
+if pre_open && [ -f "§WORK/pre/${BootEntry.CONF}" ]; then
+  entry_matches "§WORK/pre" "§WORK/pre/KERNEL" || fail "The image's boot entry doesn't match its KERNEL. Nothing was changed."
+fi
+unmount_all
+rm -f "§PRE"
+""".trim().replace("§", "$")
+
+    /**
+     * OpenABL's boot entry ([BootEntry]), when the image has one: it was made from
+     * the image's KERNEL, and re-pointing changed only KERNEL's command line, so
+     * the entry gets the same kernel, initrd and DTBs under the new KERNEL's hash,
+     * with its command line (pbos-update.py's order, see [ScriptKit.BOOT_ENTRY]).
+     * Without it, OpenABL would start the card's root= (OpenABL 1.2 tries the
+     * entry before KERNEL; newer ones boot only the entry). An image without one
+     * installs as before. Then the README and, after a flush, the entry read back.
+     */
+    private val BOOT_ENTRY_BLOCK = """
+ENTRY=
+if [ -f "§WORK/src/${BootEntry.CONF}" ]; then
+  ENTRY=1
+${ScriptKit.BOOT_ENTRY.prependIndent("  ")}
+  entry_matches "§WORK/src" "§WORK/src/KERNEL" || fail "The image's boot entry doesn't match its KERNEL."
+  BE_TAG=§(kernel_tag "§WORK/src/KERNEL") BE_DIR="§WORK/entry"
+  rm -rf "§BE_DIR" && mkdir -p "§BE_DIR/dtbs" &&
+    cp "§WORK/src/${BootEntry.DIR}/Image-§BE_TAG.gz" "§BE_DIR/Image.gz" &&
+    cp "§WORK/src/${BootEntry.DIR}/initrd-§BE_TAG.gz" "§BE_DIR/initrd.gz" &&
+    cp "§WORK/src/${BootEntry.DTBS}"/*.dtb "§BE_DIR/dtbs/" || fail "Couldn't read the image's boot entry."
+  put_entry "§WORK/boot" "§K" "§BE_DIR" || fail "Couldn't write the boot entry."
+  printf '%s\n' "PB-OS on internal storage, installed by the PB-OS Installer app." \
+    "The boot menu starts ${BootEntry.CONF} (OpenABL 1.2 can also start KERNEL)." \
+    "Both are the same kernel. Do not rename or edit them." \
+    "root=PARTLABEL=STORAGE" > "§WORK/boot/README.txt"
+else
+  printf '%s\n' "PB-OS on internal storage, installed by the PB-OS Installer app." \
+    "The boot menu reads KERNEL from this partition. Do not rename it." \
+    "root=PARTLABEL=STORAGE" > "§WORK/boot/README.txt"
+fi
+if [ -n "§ENTRY" ]; then
+  sync
+  echo 3 > /proc/sys/vm/drop_caches
+  entry_matches "§WORK/boot" "§K" &&
+    grep -Eq '^options (.* )?root=PARTLABEL=STORAGE( |§)' "§WORK/boot/${BootEntry.CONF}" ||
+    fail "The boot entry didn't read back correctly."
+fi
+""".trim().replace("§", "$")
+
     /** The image's home into HOME (first: the system copy overwrites the image in STORAGE). */
     private val homeCopy = """
 # Home first: the system copy below overwrites the image in STORAGE.
@@ -356,19 +433,22 @@ unmount_all
      * HOME stays as it is, except one folder: from PB-OS alpha v0.5.4 on, the
      * Android apps payload (Play Store, framework fixes) is in the image's home,
      * not its system, so a kept HOME takes it from the image (replacing an older
-     * copy). Before the system copy, which overwrites the image in STORAGE.
+     * copy, also one under the name the images before alpha v0.5.4.21 used). Before
+     * the system copy, which overwrites the image in STORAGE.
      */
     private val keptHomeAndroid = """
 # HOME stays as it is, except the Android apps payload, which comes from the image's home.
-KA=steamos/.local/share/konkr-android
+KA=steamos/.local/share/pbos-android
+KA_OLD=steamos/.local/share/konkr-android
 loop IMG_HOME ${'$'}(expr ${'$'}ST_OFF + ${'$'}P3_OFF) ${'$'}P3_LEN ro && mnt "${'$'}IMG_HOME" "${'$'}WORK/imghome" ro,noload ext4 ||
   fail "Couldn't open the image's home."
+[ -d "${'$'}WORK/imghome/${'$'}KA" ] || KA="${'$'}KA_OLD"
 if [ -d "${'$'}WORK/imghome/${'$'}KA" ]; then
   loop HOME_KA ${'$'}HM_OFF ${'$'}HM_LEN && mnt "${'$'}HOME_KA" "${'$'}WORK/home" rw,noatime ext4 || fail "Couldn't open HOME."
   for d in steamos/.local steamos/.local/share; do
     [ -d "${'$'}WORK/home/${'$'}d" ] || { mkdir "${'$'}WORK/home/${'$'}d" && chown 1000:1000 "${'$'}WORK/home/${'$'}d"; } || fail "Couldn't prepare HOME."
   done
-  rm -rf "${'$'}WORK/home/${'$'}KA" && cp -a "${'$'}WORK/imghome/${'$'}KA" "${'$'}WORK/home/${'$'}KA" &&
+  rm -rf "${'$'}WORK/home/${'$'}KA" "${'$'}WORK/home/${'$'}KA_OLD" && cp -a "${'$'}WORK/imghome/${'$'}KA" "${'$'}WORK/home/${'$'}KA" &&
     chown -R 1000:1000 "${'$'}WORK/home/${'$'}KA" || fail "Couldn't copy the Android apps files to HOME."
 fi
 sync

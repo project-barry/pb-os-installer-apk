@@ -112,14 +112,59 @@ class InternalScriptTest {
         assertTrue("trap 'unmount_all; restore_vm; clean_work; on_exit' EXIT" in body)
     }
 
+    @Test fun bootEntryFollowsTheRepointedKernel() {
+        val body = InternalScript.installBody(job)
+        fun at(s: String) = body.indexOf(s).also { assertTrue(s, it >= 0) }
+        // Only when the image has one; an image without it gets the boot files and README as before.
+        assertTrue("if [ -f \"\$WORK/src/loader/entries/pbos.conf\" ]; then" in body)
+        assertTrue("\"The boot menu reads KERNEL from this partition. Do not rename it.\"" in body)
+        // The image's entry must be the image KERNEL's; then it is rewritten for the re-pointed one.
+        assertTrue(at("retarget_kernel \"\$K\" PARTLABEL=STORAGE") < at("entry_matches \"\$WORK/src\" \"\$WORK/src/KERNEL\""))
+        assertTrue(at("entry_matches \"\$WORK/src\"") < at("put_entry \"\$WORK/boot\" \"\$K\" \"\$BE_DIR\""))
+        assertTrue(at("md5sum KERNEL > KERNEL.md5") < at("put_entry \"\$WORK/boot\""))
+        // Read back from the disk, pointing at STORAGE, before the boot partition is let go.
+        val readBack = at("entry_matches \"\$WORK/boot\" \"\$K\"")
+        assertTrue(readBack > at("put_entry \"\$WORK/boot\""))
+        assertTrue(readBack > body.indexOf("drop_caches", at("put_entry \"\$WORK/boot\"")))
+        assertTrue("grep -Eq '^options (.* )?root=PARTLABEL=STORAGE( |\$)'" in body)
+        assertTrue(readBack < body.indexOf("unmount_all", readBack))
+        assertTrue(readBack < at("Copying home failed"))
+        assertTrue("The boot menu starts loader/entries/pbos.conf" in body)
+    }
+
+    @Test fun wrongImageEntryStopsBeforeAnythingIsWritten() {
+        val body = InternalScript.installBody(job)
+        assertValidShell(body)
+        fun at(s: String) = body.indexOf(s).also { assertTrue(s, it >= 0) }
+        val check = at("entry_matches \"\$WORK/pre\" \"\$WORK/pre/KERNEL\" || fail \"The image's boot entry doesn't match its KERNEL. Nothing was changed.\"")
+        assertTrue(check < at("# From here on the old Linux install is overwritten."))
+        assertTrue(check < at("loop STAGE"))
+        // Its tools are there by then, and it cleans up after itself.
+        assertTrue(at("entry_matches() {") < check)
+        assertTrue(at("mnt() {") < check && at("u32() {") < check)
+        assertTrue(body.indexOf("unmount_all\nrm -f \"\$PRE\"", check) in check..at("loop STAGE"))
+        // Not being able to look never stops an install: only a confirmed mismatch does.
+        assertTrue("if pre_open && [ -f \"\$WORK/pre/loader/entries/pbos.conf\" ]; then" in body)
+    }
+
+    @Test fun theImagesEntryIsNeverCopiedToInternalStorage() {
+        val body = InternalScript.installBody(job)
+        fun at(s: String) = body.indexOf(s).also { assertTrue(s, it >= 0) }
+        val skip = at("case \"\${f##*/}\" in loader|pbos) [ -f \"\$WORK/src/loader/entries/pbos.conf\" ] && continue ;; esac")
+        assertTrue(skip > at("for f in \"\$WORK\"/src/*; do"))
+        assertTrue(skip < at("cp -r \"\$f\" \"\$WORK/boot/\""))
+    }
+
     @Test fun keptHomeIsCheckedAndOnlyGetsTheAndroidFiles() {
         val body = InternalScript.installBody(job.copy(table = emptyList(), keepHome = true))
         assertValidShell(body)
         assertFalse("Copying home failed" in body)
         assertFalse(Regex("loop DST \\${'$'}HM_OFF").containsMatchIn(body)) // HOME is never overwritten whole
         // Only the Android apps payload, from the image's home, before the system copy overwrites the image.
-        assertTrue("KA=steamos/.local/share/konkr-android" in body)
-        assertTrue("rm -rf \"${'$'}WORK/home/${'$'}KA\" && cp -a \"${'$'}WORK/imghome/${'$'}KA\"" in body)
+        assertTrue("KA=steamos/.local/share/pbos-android" in body)
+        assertTrue("KA_OLD=steamos/.local/share/konkr-android" in body) // images before alpha v0.5.4.21
+        assertTrue("|| KA=\"${'$'}KA_OLD\"" in body)
+        assertTrue("rm -rf \"${'$'}WORK/home/${'$'}KA\" \"${'$'}WORK/home/${'$'}KA_OLD\" && cp -a \"${'$'}WORK/imghome/${'$'}KA\"" in body)
         assertTrue(body.indexOf("loop IMG_HOME") in 0 until body.indexOf("Copying the system failed"))
         assertFalse(Regex("rm -rf \"\\${'$'}WORK/home\"").containsMatchIn(body))
         assertTrue("loop HOME_CHECK ${'$'}HM_OFF ${'$'}HM_LEN ro" in body)

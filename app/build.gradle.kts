@@ -6,6 +6,9 @@ plugins {
 
 val allowUntested = (findProperty("allowUntested") as String?).toBoolean()
 val reportUrl = ((findProperty("pbosReportUrl") as String?) ?: System.getenv("PBOS_REPORT_URL") ?: "").trim()
+// Test builds only: -PpbosReleasesRepo=project-barry/pb-os-dev takes images from the dev releases.
+val releasesRepo = (findProperty("pbosReleasesRepo") as String?) ?: "project-barry/pb-os"
+require(releasesRepo.matches(Regex("project-barry/pb-os(-dev)?"))) { "pbosReleasesRepo must be one of PB-OS's repos" }
 require(reportUrl.isEmpty() || reportUrl.matches(Regex("https://[A-Za-z0-9./_-]+"))) { "pbosReportUrl must be a plain https URL" }
 
 /**
@@ -37,10 +40,10 @@ android {
         applicationId = "org.projectbarry.pbosinstaller"
         minSdk = 30
         targetSdk = 35
-        versionCode = 11
-        versionName = "0.4.3"
+        versionCode = 12
+        versionName = "0.5.0"
         buildConfigField("boolean", "ALLOW_UNTESTED", allowUntested.toString())
-        buildConfigField("String", "RELEASES_REPO", "\"project-barry/pb-os\"")
+        buildConfigField("String", "RELEASES_REPO", "\"$releasesRepo\"")
         // Device-report relay (relay/worker.js), kept out of the repo: set pbosReportUrl in
         // ~/.gradle/gradle.properties or PBOS_REPORT_URL. Without it the report button is hidden.
         buildConfigField("String", "REPORT_URL", "\"$reportUrl\"")

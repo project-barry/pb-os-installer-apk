@@ -129,6 +129,12 @@ class RootJobs(private val context: Context) {
         statusFile(name).delete()
     }
 
+    /** Forgets a job that was prepared but never ran, and its script, so a launcher left over in Downloads does nothing. */
+    fun drop(name: String) {
+        scriptFile(name).delete()
+        clear(name)
+    }
+
     /** Puts a launcher in Downloads, replacing copies the app saved before. */
     private fun saveLauncher(name: String, text: String): String {
         val stem = "pbos-$name"

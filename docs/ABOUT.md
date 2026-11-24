@@ -4,7 +4,7 @@ PB-OS Installer puts PB-OS on a microSD card, right on your handheld. It asks
 you before each step.
 
 1. Checks that your handheld has a chip PB-OS supports (Snapdragon 8 Gen 2 or
-   8 Gen 3).
+   8 Gen 3, or the Retroid Pocket Duo's).
 2. Checks your microSD card (32 GB or bigger) and that PB-OS supports your
    handheld.
 3. Finds the newest PB-OS release on GitHub.
@@ -12,7 +12,7 @@ you before each step.
    team.
 5. Writes it to the microSD card, erasing what's on it, and reads it back to
    check every byte.
-6. Sets up the boot menu (OpenABL, by the Open Handheld Collective) so your
+6. Sets up the boot menu (our build of OpenABL by the Open Handheld Collective) so your
    handheld can start PB-OS from the card, after saving a copy of the
    original.
 7. To start PB-OS: hold Volume Down while you turn the handheld on, then set

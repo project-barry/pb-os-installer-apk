@@ -69,6 +69,15 @@ data class RepairReport(val installs: List<Install>, val bootMenu: List<Finding>
                     "the current kernel is kept as KERNEL.bad."
         }
 
+        /** The kernel is right, but OpenABL's boot entry doesn't start it: the entry is written again from it. */
+        data class Entry(val install: Install, val kernel: File) : Fix {
+            override val label get() = "Write the Boot Entry Again"
+            override val explain get() =
+                "The boot menu's entry (${BootEntry.CONF}) doesn't start this install's kernel, so the boot menu may " +
+                    "start an older kernel or none. This writes the entry again from the current kernel; the kernel " +
+                    "itself stays as it is."
+        }
+
         /** Undo an earlier kernel repair: KERNEL.bad back in place (the current kernel becomes KERNEL.bad). */
         data class Undo(val install: Install, val kernel: File) : Fix {
             override val label get() = "Put Back the Kernel from Before the Repair"
@@ -86,8 +95,11 @@ data class RepairReport(val installs: List<Install>, val bootMenu: List<Finding>
     }
 
     companion object {
-        /** Reads the check's folder: [out]/abl, [out]/internal/…, [out]/card/…. [found]: the status's found= list. */
-        fun read(out: File, found: List<String>): RepairReport {
+        /**
+         * Reads the check's folder: [out]/abl, [out]/internal/…, [out]/card/…. [found]: the status's found= list.
+         * [bundled]: the boot menu the app can install here, or null.
+         */
+        fun read(out: File, found: List<String>, bundled: String?): RepairReport {
             val installs = mutableListOf<Install>()
             val fixes = mutableListOf<Fix>()
             for (place in RepairScript.Place.entries) {
@@ -96,7 +108,7 @@ data class RepairReport(val installs: List<Install>, val bootMenu: List<Finding>
                 installs += install
                 fixes += installFixes
             }
-            val (menu, menuFix) = bootMenu(File(out, "abl"))
+            val (menu, menuFix) = bootMenu(File(out, "abl"), bundled)
             return RepairReport(installs, menu, fixes + listOfNotNull(menuFix))
         }
 
@@ -137,6 +149,7 @@ data class RepairReport(val installs: List<Install>, val bootMenu: List<Finding>
                     }
                 }
             }
+            val entryOk = if (kernelBytes != null && kernel != null && kernel.idOk) entry(dir, kernelBytes, ::ok, ::note, ::problem) else null
             if (place == RepairScript.Place.Internal && i["boot_sector"] != null && i["boot_sector"] != "4096") {
                 note("The boot partition uses ${i["boot_sector"]}-byte sectors, so PB-OS can't mount it to update its kernel.")
             }
@@ -172,6 +185,11 @@ data class RepairReport(val installs: List<Install>, val bootMenu: List<Finding>
                 else -> {}
             }
 
+            // Where the boot partition has an entry, the job refuses a kernel that can't
+            // start from it: such a fix isn't offered.
+            val hasEntry = File(dir, "pbos.conf").isFile
+            fun startsFromEntry(k: File) = !hasEntry || BootEntry.splitOrNull(k.readBytes()) != null
+
             val sha = kernelBytes?.let { hash("SHA-256", it) }
             val install = Install(place, version, findings, root, sha)
             // The last update can be undone while the updater still has everything for it
@@ -180,35 +198,78 @@ data class RepairReport(val installs: List<Install>, val bootMenu: List<Finding>
                 text(File(dir, "pending")) == null
             ) {
                 val prev = runCatching { BootImage.parse(last.previousKernel.readBytes()) }.getOrNull()
-                if (prev != null && prev.idOk && root != null) fixes += Fix.UndoUpdate(install, last, last.previousKernel)
+                if (prev != null && prev.idOk && root != null && startsFromEntry(last.previousKernel)) fixes += Fix.UndoUpdate(install, last, last.previousKernel)
             }
-            if (kernel != null && kernel.idOk && root != null && kernel.root != root) fixes += Fix.Repoint(install, kernelFile)
-            if (bad != null && bad.idOk && root != null) fixes += Fix.Undo(install, badFile)
+            if (kernel != null && kernel.idOk && root != null && kernel.root != root && startsFromEntry(kernelFile)) {
+                fixes += Fix.Repoint(install, kernelFile)
+            }
+            // A kernel fix writes the entry too; on its own only when the kernel is right.
+            if (entryOk == false && kernel?.root == root && root != null && BootEntry.splitOrNull(kernelBytes!!) != null) {
+                fixes += Fix.Entry(install, kernelFile)
+            }
+            if (bad != null && bad.idOk && root != null && startsFromEntry(badFile)) fixes += Fix.Undo(install, badFile)
             return install to fixes
         }
 
-        /** Both slots must hold a boot menu (OpenABL, or ROCKNIX's from earlier installs). */
-        fun bootMenu(file: File): Pair<List<Finding>, Fix?> {
+        /**
+         * OpenABL's boot entry against the KERNEL (the check copied pbos.conf and the
+         * SHA-256 of each file in its folders, entry-files). Null: no entry (images
+         * before the entry boot KERNEL, which OpenABL 1.2 does); true: it starts
+         * exactly this KERNEL; false: it doesn't.
+         */
+        private fun entry(dir: File, kernel: ByteArray, ok: (String) -> Unit, note: (String) -> Unit, problem: (String) -> Unit): Boolean? {
+            val conf = File(dir, "pbos.conf")
+            if (!conf.isFile) {
+                note("No boot entry (${BootEntry.CONF}): OpenABL newer than 1.2 can't start this kernel.")
+                return null
+            }
+            val split = BootEntry.splitOrNull(kernel)
+            if (split == null) {
+                problem("The boot menu's entry (${BootEntry.CONF}) can't start this kernel (it has no EFI stub, DTBs or initrd).")
+                return false
+            }
+            val files = runCatching { File(dir, "entry-files").readLines() }.getOrDefault(emptyList()).mapNotNull { l ->
+                l.split(Regex("\\s+"), limit = 2).takeIf { it.size == 2 }?.let { it[1].trim() to it[0] }
+            }.toMap()
+            val tag = BootEntry.tag(kernel)
+            val wanted = listOf("${BootEntry.DIR}/Image-$tag.gz" to split.gz, "${BootEntry.DIR}/initrd-$tag.gz" to split.initrd) +
+                split.dtbs.map { (name, dtb) -> "${BootEntry.DTBS}/$name" to dtb }
+            val same = runCatching { conf.readText() }.getOrNull() == BootEntry.conf(tag, split.cmdline) &&
+                wanted.all { (path, bytes) -> files[path] == hash("SHA-256", bytes) }
+            if (same) ok("The boot menu's entry starts this kernel.") else problem("The boot menu's entry (${BootEntry.CONF}) doesn't start this kernel.")
+            return same
+        }
+
+        /**
+         * Both slots must hold a boot menu (OpenABL, or ROCKNIX's from earlier installs).
+         * [bundled]: the one the app can install on this handheld; null: none, so no fix.
+         */
+        fun bootMenu(file: File, bundled: String?): Pair<List<Finding>, Fix?> {
             val slots = runCatching { file.readLines() }.getOrDefault(emptyList())
                 .mapNotNull { l -> l.split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1].trim() } }.toMap()
+            val unfinished = slots["unfinished"] == "1"
+            if (unfinished) return listOf(Finding(Level.Problem, "A boot menu install didn't finish.")) to Fix.BootMenu
             if (slots.isEmpty()) return listOf(Finding(Level.Note, "Couldn't read the boot loader.")) to null
             val findings = slots.toSortedMap().map { (slot, what) ->
                 val name = "Slot ${slot.removePrefix("abl_").uppercase()}"
                 val menu = AblKnown.menuName(what)
                 when {
-                    menu != null -> Finding(Level.Ok, "$name: ${AblKnown.menuLabel(menu)}.")
+                    menu != null -> Finding(Level.Ok, "$name: ${AblKnown.menuLabel(menu, bundled)}.")
+                    // Nothing this version could put there: no reason to call the handheld's own a problem.
+                    what.startsWith("stock: ") && bundled == null -> Finding(Level.Note, "$name: the original boot loader (no boot menu).")
                     what.startsWith("stock: ") -> Finding(Level.Problem, "$name: the original boot loader (no boot menu). An Android update may have put it back.")
                     else -> Finding(Level.Problem, "$name: a boot loader the app doesn't know.")
                 }
             }
             // A working older menu (an older OpenABL, or ROCKNIX's) can still be switched to the bundled one.
-            val older = findings.none { it.level == Level.Problem } &&
-                slots.values.any { it != AblScript.MENU + AblKnown.BUNDLED }
+            val older = bundled != null && findings.none { it.level == Level.Problem } &&
+                slots.values.any { it != AblScript.MENU + bundled }
             val notes = if (older) {
-                listOf(Finding(Level.Note, "${AblKnown.BUNDLED} can replace this boot menu."))
+                listOf(Finding(Level.Note, "$bundled can replace this boot menu."))
             } else {
                 emptyList()
             }
+            if (bundled == null) return findings to null
             return findings + notes to if (older || findings.any { it.level == Level.Problem }) Fix.BootMenu else null
         }
 

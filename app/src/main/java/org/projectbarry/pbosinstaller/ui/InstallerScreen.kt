@@ -76,9 +76,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import org.projectbarry.pbosinstaller.BuildConfig
 import org.projectbarry.pbosinstaller.R
+import org.projectbarry.pbosinstaller.abl.AblCatalog
 import org.projectbarry.pbosinstaller.abl.AblKnown
 import org.projectbarry.pbosinstaller.abl.AblScript
 import org.projectbarry.pbosinstaller.device.Devices
+import org.projectbarry.pbosinstaller.device.Soc
 import org.projectbarry.pbosinstaller.internal.InternalLayout
 import org.projectbarry.pbosinstaller.internal.InternalScript
 import org.projectbarry.pbosinstaller.repair.RepairReport
@@ -180,7 +182,8 @@ private fun Footer(vm: InstallerViewModel, gap: Dp) {
         // the focus outline.
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
-                "PB-OS Installer ${BuildConfig.VERSION_NAME}",
+                "PB-OS Installer ${BuildConfig.VERSION_NAME}" +
+                    if (BuildConfig.RELEASES_REPO == "project-barry/pb-os") "" else " (test: dev releases)",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 softWrap = false,
@@ -244,8 +247,8 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel, modifier
                 Step.WrongChip -> {
                     Title("This device can't run PB-OS")
                     Body(
-                        "PB-OS only runs on handhelds with a Snapdragon 8 Gen 2 (SM8550) or " +
-                            "Snapdragon 8 Gen 3 (SM8650) chip. This one reports \"${vm.info.socModel.ifBlank { "unknown" }}\"."
+                        "PB-OS only runs on handhelds with a ${AblCatalog.current.chips} chip. " +
+                            "This one reports \"${vm.info.socModel.ifBlank { "unknown" }}\"."
                     )
                 }
 
@@ -275,13 +278,27 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel, modifier
                     Body(
                         "This device has the right chip, a ${vm.info.soc?.label}, but PB-OS hasn't been tested " +
                             "on it, so this app won't install it. PB-OS is tested on: " +
-                            Devices.tested.joinToString(", ") { it.name } + "."
+                            Devices.tested.filter { AblCatalog.current.payload(it.soc) != null }.joinToString(", ") { it.name } + "."
                     )
                     Body(
                         "Got one of those and still see this? Tap " +
                             (if (vm.reportAvailable) "\"Send Device Report\" below" else "\"What's in the Report?\" below, copy the report and send it to us on Discord") +
                             ", so we can add your device."
                     )
+                }
+
+                is Step.NotReady -> {
+                    Title("Not ready for your ${vm.handheld} yet")
+                    Body(step.reason)
+                    step.looked?.let { Body(it) }
+                    if (step.update) {
+                        Button(onClick = vm::lookForAppUpdate, modifier = Modifier.focusRing().focusRequester(primary)) {
+                            Text("Look for an App Update")
+                        }
+                        OutlinedButton(onClick = vm::backToStart, modifier = Modifier.focusRing()) { Text("Back") }
+                    } else {
+                        Button(onClick = vm::backToStart, modifier = Modifier.focusRing().focusRequester(primary)) { Text("Back") }
+                    }
                 }
 
                 is Step.Offer -> OfferStep(step, card, vm, primary)
@@ -344,6 +361,7 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel, modifier
                             "by the Open Handheld Collective (the boot menu ROCKNIX uses too). " +
                             "Android stays: you choose it in the same menu."
                     )
+                    if (vm.info.soc == Soc.SM7750) Warning(AblCatalog.DUO_WARNING)
                     Body("First, the app saves a copy of the original boot loader. Nothing is changed yet.")
                     Button(onClick = vm::backUpBootLoader, modifier = Modifier.focusRing().focusRequester(primary)) {
                         Text("Back Up Boot Loader")
@@ -351,25 +369,93 @@ private fun StepCard(step: Step, card: SdCard?, vm: InstallerViewModel, modifier
                 }
 
                 is Step.AblRunScript -> RunAsRoot(
-                    if (step.job == AblScript.BACKUP) "Backing up the boot loader" else "Installing the boot menu",
+                    when (step.job) {
+                        AblScript.BACKUP -> "Backing up the boot loader"
+                        AblScript.RESTORE -> "Putting the original boot loader back"
+                        AblScript.CHECK -> "Checking the boot loader"
+                        else -> "Installing the boot menu"
+                    },
                     step.launcher, vm, primary,
                 )
 
                 is Step.AblWorking -> Busy(
-                    if (step.job == AblScript.BACKUP) "Backing up the boot loader…" else "Installing the boot menu…"
+                    when (step.job) {
+                        AblScript.BACKUP -> "Backing up the boot loader…"
+                        AblScript.RESTORE -> "Putting the original boot loader back…"
+                        AblScript.CHECK -> "Checking the boot loader…"
+                        else -> "Installing the boot menu…"
+                    }
                 )
 
                 is Step.AblBackedUp -> BackedUpStep(step, vm, primary)
 
-                Step.AblInstallReady -> {
+                is Step.AblInstallReady -> {
                     Title("Install the boot menu")
                     Warning(
-                        "This replaces the boot loader of your ${vm.handheld} with the ${AblKnown.BUNDLED} boot menu. " +
-                            "If anything goes wrong, the app puts the original back."
+                        "This replaces the boot loader of your ${vm.handheld} with the ${vm.bundledMenu ?: "OpenABL"} boot menu. " +
+                            "If anything goes wrong, the app puts the original back and checks it."
                     )
+                    if (vm.info.soc == Soc.SM7750) Warning(AblCatalog.DUO_WARNING)
+                    step.problem?.let { Warning(it) }
                     Button(onClick = vm::installBootMenu, modifier = Modifier.focusRing().focusRequester(primary)) {
                         Text("Install Boot Menu")
                     }
+                }
+
+                is Step.AblInterrupted -> {
+                    Title(
+                        when (step.slots) {
+                            "mixed" -> "The boot menu is on one slot only"
+                            "newer" -> "The boot loader changed"
+                            else -> "The boot menu install didn't finish"
+                        }
+                    )
+                    when (step.slots) {
+                        null -> Body("First check what the boot loader slots hold (it only reads). Leave your ${vm.handheld} on until then.")
+                        "mixed" -> Body("Each slot holds a whole boot loader, one the original and one the boot menu. Put the original back, or finish installing.")
+                        "newer" -> Body(
+                            "A slot holds something newer, most likely from an Android update, so the app doesn't write over it. " +
+                                "Let Android finish its update and restart, then check again."
+                        )
+                        else -> Warning(
+                            "Don't turn your ${vm.handheld} off and don't restart it until this is done: it may not start again. " +
+                                "Keep it charged."
+                        )
+                    }
+                    step.message?.let { Body(it) }
+                    if (step.slots == "newer" || step.slots == "other") {
+                        Body(
+                            "The app can't go on by itself here. The boot loader from before the install is in " +
+                                "${step.backup ?: "Documents/PB-OS/ABL backup"} on this handheld, and wherever you saved a copy. " +
+                                "Please ask for help on Discord (at the bottom), and say what this screen shows."
+                        )
+                    }
+                    step.looked?.let { Body(it) }
+                    if (step.slots == "half" || step.slots == "mixed") {
+                        Body(
+                            "Put Original Back writes the boot loader from before the install again, from its backup." +
+                                (step.menu?.let { " Finish Installing writes the rest of the $it boot menu." } ?: "") +
+                                " Both read back what they wrote."
+                        )
+                        Button(onClick = vm::restoreBootLoader, modifier = Modifier.focusRing().focusRequester(primary)) {
+                            Text("Put Original Back")
+                        }
+                        if (step.menu != null) {
+                            OutlinedButton(onClick = vm::finishBootMenu, modifier = Modifier.focusRing()) { Text("Finish Installing") }
+                        }
+                        OutlinedButton(onClick = vm::checkBootLoader, modifier = Modifier.focusRing()) { Text("Check Again") }
+                    } else {
+                        Button(onClick = vm::checkBootLoader, modifier = Modifier.focusRing().focusRequester(primary)) {
+                            Text(if (step.slots == null) "Check the Boot Loader" else "Check Again")
+                        }
+                        OutlinedButton(onClick = vm::lookForAppUpdate, modifier = Modifier.focusRing()) { Text("Look for an App Update") }
+                    }
+                }
+
+                is Step.AblEnded -> {
+                    Title("The boot menu install is over")
+                    Body(step.message)
+                    Button(onClick = vm::backToStart, modifier = Modifier.focusRing().focusRequester(primary)) { Text("OK") }
                 }
 
                 Step.BootMenuDone -> {
@@ -614,7 +700,7 @@ private fun BackedUpStep(step: Step.AblBackedUp, vm: InstallerViewModel, primary
         if (uri != null) vm.saveBackupZip(uri) { saved = it }
     }
     Title("Boot loader backed up")
-    Body("Slot A: ${slotLabel(step.slotA)}\nSlot B: ${slotLabel(step.slotB)}")
+    Body("Slot A: ${slotLabel(step.slotA, vm.bundledMenu)}\nSlot B: ${slotLabel(step.slotB, vm.bundledMenu)}")
     step.documents?.let { Body("A copy is in $it on this handheld.") }
     Warning(
         "Save another copy somewhere else too (Google Drive, a USB drive, your computer). " +
@@ -642,9 +728,9 @@ private fun BackedUpStep(step: Step.AblBackedUp, vm: InstallerViewModel, primary
     }
 }
 
-private fun slotLabel(slot: String): String = when {
+private fun slotLabel(slot: String, bundled: String?): String = when {
     slot.startsWith("stock: ") -> "original boot loader (${slot.removePrefix("stock: ")})"
-    AblKnown.menuName(slot) != null -> AblKnown.menuLabel(AblKnown.menuName(slot)!!)
+    AblKnown.menuName(slot) != null -> AblKnown.menuLabel(AblKnown.menuName(slot)!!, bundled)
     else -> "unknown boot loader"
 }
 

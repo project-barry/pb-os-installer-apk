@@ -12,12 +12,15 @@ import org.projectbarry.pbosinstaller.root.ScriptKit
  * loop devices (never the partitions themselves: Android may have the card's
  * FAT mounted), and copies what the app judges into its folder: KERNEL,
  * KERNEL.md5, the version files, fstab, the updater's records and the
- * previous kernel an update keeps. It also says what each boot loader slot
- * holds.
+ * previous kernel an update keeps, OpenABL's boot entry (pbos.conf, and the
+ * SHA-256 of each file in its folders). It also says what each boot loader
+ * slot holds.
  *
  * [kernelBody] replaces one install's KERNEL with a kernel the app checked
  * (the one from before the last update, or the same one re-pointed), keeping
- * the old one as KERNEL.bad, and reads it back.
+ * the old one as KERNEL.bad, and reads it back. Where the boot partition has
+ * OpenABL's boot entry ([BootEntry]), the entry is written from the new KERNEL
+ * too; an entry-only job writes just the entry from the KERNEL in place.
  */
 object RepairScript {
     const val CHECK = "repair-check"
@@ -66,6 +69,11 @@ inspect() {
   if ro_loop B "${'$'}2" && mount -t vfat -o ro "${'$'}B" "${'$'}MNT/boot"; then
     echo boot_mounts=1 >> "${'$'}D/info"
     for f in KERNEL KERNEL.md5 KERNEL.bad; do [ -f "${'$'}MNT/boot/${'$'}f" ] && cp "${'$'}MNT/boot/${'$'}f" "${'$'}D/"; done
+    # OpenABL's boot entry: its text, and what its folders hold.
+    if [ -f "${'$'}MNT/boot/${BootEntry.CONF}" ]; then
+      cp "${'$'}MNT/boot/${BootEntry.CONF}" "${'$'}D/pbos.conf"
+      (cd "${'$'}MNT/boot" && for f in ${BootEntry.DIR}/* ${BootEntry.DTBS}/*; do [ -f "${'$'}f" ] && sha256sum "${'$'}f"; done) > "${'$'}D/entry-files"
+    fi
     umount "${'$'}MNT/boot"
   else
     echo boot_mounts=0 >> "${'$'}D/info"
@@ -128,6 +136,8 @@ for s in a b; do
     echo "abl_${'$'}s=${'$'}(identify /dev/block/by-name/abl_${'$'}s)"
   fi
 done > "${'$'}OUT/abl"
+# Root's note of a boot menu install that didn't finish (the app's own can be cleared).
+[ ! -f /data/local/tmp/pbos-abl-work/journal ] || echo "unfinished=1" >> "${'$'}OUT/abl"
 give "${'$'}OUT/abl"
 EXTRA="found=${'$'}{FOUND# }"
 status done
@@ -152,6 +162,14 @@ status done
          * starts next restores the files it replaced (konkr-update.py recover).
          */
         val undoUpdate: String? = null,
+        /**
+         * The kernel's OpenABL boot entry pieces ([BootEntry.Split.writeTo]), or null
+         * when it can't start from an entry. The entry is written wherever the boot
+         * partition has one, so it keeps starting the KERNEL in place.
+         */
+        val entry: String? = null,
+        /** Only write the boot entry, from the KERNEL in place ([kernel] is the check's copy of it). */
+        val entryOnly: Boolean = false,
     )
 
     val KERNEL_STATES = listOf("started", "checking", "unmounting", "writing", "verifying", "done", "failed")
@@ -162,6 +180,9 @@ status done
     fun kernelBody(job: KernelJob): String {
         val q = ScriptKit::quote
         job.undoUpdate?.let { require(Regex("[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}").matches(it)) { "bad update id" } }
+        require(!job.entryOnly || (job.entry != null && job.currentSha256 == job.kernelSha256 && job.undoUpdate == null)) {
+            "an entry-only job needs the entry and the KERNEL in place"
+        }
         val parts = when (job.place) {
             Place.Internal -> """
 BOOT=/dev/block/by-name/ROCKNIX SYSTEM=/dev/block/by-name/STORAGE HOMEP=/dev/block/by-name/HOME
@@ -177,13 +198,14 @@ $CARD_UNMOUNT
         }.replace("§", D)
         return """
 ${ScriptKit.prelude(KERNEL, job.id, job.statusFile)}
-# Replaces the KERNEL of PB-OS (${job.place.key}) with one the app checked; the old one stays as KERNEL.bad.
+${if (job.entryOnly) "# Writes the boot menu's entry of PB-OS (${job.place.key}) again, from the KERNEL in place." else "# Replaces the KERNEL of PB-OS (${job.place.key}) with one the app checked; the old one stays as KERNEL.bad."}
 ${if (job.undoUpdate != null) "# First the update ${job.undoUpdate} is marked for PB-OS's updater to undo at the next start." else ""}
 SRC=${q(job.kernel)}
 SRC_SHA=${q(job.kernelSha256)}
 ROOT=${q(job.root)}
 WANT_OLD=${q(job.currentSha256 ?: "")}
 UNDO=${q(job.undoUpdate ?: "")}
+ENTRY=${q(job.entry ?: "")}
 # The replaced kernel's name. After an undo it belongs to the newer system, so it gets
 # a name the repair check never offers back (putting it back would mix versions).
 OLD=${if (job.undoUpdate != null) "KERNEL.before-undo" else "KERNEL.bad"}
@@ -192,6 +214,7 @@ MNT=/data/local/tmp/pbos-repair
 status checking
 $COMMON
 ${ScriptKit.RETARGET_KERNEL}
+${ScriptKit.BOOT_ENTRY}
 [ "§(sha "§SRC")" = "§SRC_SHA" ] || fail "The kernel the app prepared is damaged. Check again."
 $parts
 LOOPS=
@@ -209,12 +232,28 @@ open() {
   LOOPS="§l §LOOPS"
   mkdir -p "§MNT/§1" && mount -t "§4" -o "§3§{5:+,§5}" "§l" "§MNT/§1"
 }
-cp "§SRC" "§NEW" && retarget_kernel "§NEW" "§ROOT" || fail "Couldn't point the kernel at this install. Nothing was changed."
+${if (job.entryOnly) "cp \"§SRC\" \"§NEW\" || fail \"Couldn't read the kernel. Nothing was changed.\"" else "cp \"§SRC\" \"§NEW\" && retarget_kernel \"§NEW\" \"§ROOT\" || fail \"Couldn't point the kernel at this install. Nothing was changed.\""}
 NEW_SHA=§(sha "§NEW")
 open boot "§BOOT" rw vfat || fail "Couldn't open PB-OS's boot partition. Nothing was changed."
 if [ -n "§WANT_OLD" ] && [ "§(sha "§MNT/boot/KERNEL" 2>/dev/null)" != "§WANT_OLD" ]; then
   fail "PB-OS's kernel changed since the check. Check again. Nothing was changed."
 fi
+# OpenABL's boot entry follows the KERNEL in place wherever there is one (newer OpenABL
+# starts only the entry, 1.2 tries it before KERNEL); an install without one stays without.
+WRITE_ENTRY=
+if ${if (job.entryOnly) "true" else "[ -f \"§MNT/boot/${BootEntry.CONF}\" ]"}; then
+  [ -n "§ENTRY" ] && kernel_has "§NEW" "§ENTRY/Image.gz" "§ENTRY/initrd.gz" "§ENTRY/dtbs" ||
+    fail "This kernel can't start from the boot menu's entry (${BootEntry.CONF}). Nothing was changed."
+  WRITE_ENTRY=1
+fi
+${if (job.entryOnly) entryOnlyWrite() else kernelWrite()}
+${undoCheck()}
+status done
+""".replace("§", D).trimStart()
+    }
+
+    /** The new KERNEL goes in (the old one kept next to it), then the entry; both read back. */
+    private fun kernelWrite() = """
 ${undoMark()}
 status writing
 # The old kernel stays next to it, so this can be undone by hand.
@@ -227,16 +266,32 @@ cp "§NEW" "§MNT/boot/KERNEL.new" && sync && [ "§(sha "§MNT/boot/KERNEL.new")
 mv -f "§MNT/boot/KERNEL.new" "§MNT/boot/KERNEL" && (cd "§MNT/boot" && md5sum KERNEL > KERNEL.md5) ||
   fail "Couldn't put the new kernel in place. The old one is in §OLD.§UNDO_NOTE"
 sync
+if [ -n "§WRITE_ENTRY" ]; then
+  put_entry "§MNT/boot" "§MNT/boot/KERNEL" "§ENTRY" ||
+    fail "Couldn't write the boot menu's entry for the new kernel. The new kernel is in place; the old one is in §OLD.§UNDO_NOTE"
+fi
 status verifying
 umount "§MNT/boot" "§MNT/system" "§MNT/home" 2>/dev/null
 echo 3 > /proc/sys/vm/drop_caches
 open boot "§BOOT" ro vfat || fail "Couldn't read the boot partition back. The new kernel is in place; the old one is in §OLD."
 [ "§(sha "§MNT/boot/KERNEL")" = "§NEW_SHA" ] && (cd "§MNT/boot" && md5sum -c KERNEL.md5 >/dev/null) ||
   fail "The new kernel didn't read back correctly. The old one is in §OLD."
-${undoCheck()}
-status done
-""".replace("§", D).trimStart()
-    }
+[ -z "§WRITE_ENTRY" ] || entry_matches "§MNT/boot" "§MNT/boot/KERNEL" ||
+  fail "The boot menu's entry didn't read back correctly. The new kernel is in place; the old one is in §OLD."
+""".replace("§", D).trim()
+
+    /** Only the entry, from the KERNEL in place (unchanged); read back. */
+    private fun entryOnlyWrite() = """
+UNDO_NOTE=
+status writing
+put_entry "§MNT/boot" "§MNT/boot/KERNEL" "§ENTRY" || fail "Couldn't write the boot menu's entry. The kernel is unchanged."
+status verifying
+umount "§MNT/boot" 2>/dev/null
+echo 3 > /proc/sys/vm/drop_caches
+open boot "§BOOT" ro vfat || fail "Couldn't read the boot partition back. The kernel is unchanged."
+[ "§(sha "§MNT/boot/KERNEL")" = "§NEW_SHA" ] && entry_matches "§MNT/boot" "§MNT/boot/KERNEL" ||
+  fail "The boot menu's entry didn't read back correctly. The kernel is unchanged."
+""".replace("§", D).trim()
 
     /**
      * Marks the update for PB-OS's updater to undo: its state.json says

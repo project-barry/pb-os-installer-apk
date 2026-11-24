@@ -22,21 +22,44 @@ import java.util.zip.ZipOutputStream
  */
 class AblSetup(private val context: Context, private val info: DeviceInfo, private val soc: Soc, private val deviceName: String) {
     private val jobs = RootJobs(context)
+    private val catalog = AblCatalog.current
+    /** The Duo's platform (sun) is the 8 Elite's too, so its scripts check the model as well. */
+    private val checkedSocModel: String? = info.socModel.takeIf { soc == Soc.SM7750 }
     val route: RootJobs.Route get() = jobs.route
 
     /** The backup folder of the last backup (app's own storage). */
     val backupDir: File? get() = jobs.extra(AblScript.BACKUP, "dir")?.let(::File)
 
+    private val backups get() = File(context.getExternalFilesDir(null), "abl-backup")
+
+    /** Root's note about an install that is under way or didn't finish (see [AblScript]). Its folder is made here, so it stays readable. */
+    private val journal: File get() = File(File(context.getExternalFilesDir(null), "abl-flash").apply { mkdirs() }, "journal")
+
+    /** An install started writing and didn't end with both slots read back. */
+    val interrupted: Boolean get() = journal.exists()
+
+    /** The boot menu that install was writing, when this version of the app still has that one to finish it. */
+    val interruptedMenu: String? get() = runCatching { journal.readLines() }.getOrNull()
+        ?.firstNotNullOfOrNull { l -> l.removePrefix("label=").takeIf { it != l } }
+        ?.takeIf { it == catalog.bundled(soc) }
+
+    /** Where the copy of the unfinished install's backup is for the user (the one the app made in Documents), or null. */
+    val interruptedBackup: String? get() = runCatching { journal.readLines() }.getOrNull()
+        ?.firstNotNullOfOrNull { l -> l.removePrefix("dir=").takeIf { it != l } }
+        .let { dir -> (dir ?: backupDir?.path)?.substringAfterLast('/') }
+        ?.let { "Documents/PB-OS/ABL backup/${backupName(it)}/" }
+
     /** Backs up both slots; returns the launcher's name in Downloads, or null when the app starts it itself. */
     fun prepareBackup(): String? {
         val stamp = SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.US).format(Date())
-        val dir = File(context.getExternalFilesDir(null), "abl-backup/$stamp").apply { mkdirs() }
+        val dir = File(backups, stamp).apply { mkdirs() }
         val id = UUID.randomUUID().toString()
         val body = AblScript.backupBody(
             AblScript.BackupJob(
                 id = id,
                 statusFile = RootJobs.rootPath(jobs.statusFile(AblScript.BACKUP)),
                 backupDir = RootJobs.rootPath(dir),
+                journal = RootJobs.rootPath(journal),
                 platform = info.boardPlatform,
                 info = listOf(
                     "handheld=$deviceName",
@@ -44,47 +67,95 @@ class AblSetup(private val context: Context, private val info: DeviceInfo, priva
                     "model=${info.model}",
                     "fingerprint=${info.fingerprint}",
                 ),
-                stock = AblKnown.stock,
-                menus = AblKnown.menus.getValue(soc),
+                stock = catalog.stock(soc),
+                menus = catalog.menus(soc),
+                socModel = checkedSocModel,
             )
         )
         return jobs.prepare(AblScript.BACKUP, id, body, mapOf("dir" to dir.absolutePath))
     }
 
-    /** Installs the bundled boot menu (OpenABL); returns the launcher's name, or null when the app starts it itself. */
-    fun prepareInstall(): String? {
-        val dir = backupDir ?: error("Back up the boot loader first.")
-        val payload = AblKnown.payload.getValue(soc)
-        val file = File(context.getExternalFilesDir(null), "abl/${payload.asset.substringAfterLast('/')}")
-        file.parentFile!!.mkdirs()
-        context.assets.open(payload.asset).use { input -> file.outputStream().use { input.copyTo(it) } }
-        check(sha256(file) == payload.sha256) { "The bundled boot menu file is damaged." }
+    /**
+     * Installs the bundled boot menu (OpenABL); returns the launcher's name, or null when the app starts it itself.
+     * [finish]: an install that didn't finish is carried on, with its own backup as the original.
+     */
+    fun prepareInstall(finish: Boolean = false): String? {
+        val dir = if (finish) null else backupDir ?: error("Back up the boot loader first.")
+        val payload = catalog.payload(soc) ?: error("this version of the app has no boot menu for the ${soc.label}")
         val id = UUID.randomUUID().toString()
         val body = AblScript.installBody(
             AblScript.InstallJob(
                 id = id,
                 statusFile = RootJobs.rootPath(jobs.statusFile(AblScript.INSTALL)),
                 platform = info.boardPlatform,
-                payload = RootJobs.rootPath(file),
+                payload = RootJobs.rootPath(payloadFile(payload)),
+                label = payload.label,
                 payloadBytes = payload.bytes,
                 payloadSha256 = payload.sha256,
-                backupDir = RootJobs.rootPath(dir),
+                backups = RootJobs.rootPath(backups),
+                backupDir = dir?.let(RootJobs::rootPath),
+                journal = RootJobs.rootPath(journal),
+                stock = catalog.stock(soc),
+                menus = catalog.menus(soc),
+                socModel = checkedSocModel,
+                careful = soc == Soc.SM7750,
+                onlyOverKnown = catalog.strict(soc),
             )
         )
         return jobs.prepare(AblScript.INSTALL, id, body)
     }
 
+    /** The boot menu's file where root can read it, checked: its size and checksum are the ones the app knows. */
+    private fun payloadFile(payload: AblKnown.Payload): File {
+        val file = File(context.getExternalFilesDir(null), "abl/${payload.asset.substringAfterLast('/')}")
+        file.parentFile!!.mkdirs()
+        context.assets.open(payload.asset).use { input -> file.outputStream().use { input.copyTo(it) } }
+        check(file.length() == payload.bytes && sha256(file) == payload.sha256) { "The bundled boot menu file is damaged." }
+        return file
+    }
+
+    private fun afterJob(job: String, id: String) = AblScript.AfterJob(
+        id = id,
+        statusFile = RootJobs.rootPath(jobs.statusFile(job)),
+        platform = info.boardPlatform,
+        backups = RootJobs.rootPath(backups),
+        journal = RootJobs.rootPath(journal),
+        stock = catalog.stock(soc),
+        menus = catalog.menus(soc),
+        payload = runCatching { catalog.payload(soc)?.let { RootJobs.rootPath(payloadFile(it)) } }.getOrNull(),
+        socModel = checkedSocModel,
+        careful = soc == Soc.SM7750,
+    )
+
+    /** Looks at what the slots hold after an install that didn't finish (writes to neither). */
+    fun prepareCheck(): String? {
+        val id = UUID.randomUUID().toString()
+        return jobs.prepare(AblScript.CHECK, id, AblScript.checkBody(afterJob(AblScript.CHECK, id)))
+    }
+
+    /** Puts the original back after an install that didn't finish. */
+    fun prepareRestore(): String? {
+        val id = UUID.randomUUID().toString()
+        return jobs.prepare(AblScript.RESTORE, id, AblScript.restoreBody(afterJob(AblScript.RESTORE, id)))
+    }
+
+    /** The app starts root jobs itself here (no launcher for the user to run). */
+    val startsItself: Boolean get() = jobs.route == RootJobs.Route.Xsu || jobs.route == RootJobs.Route.PServer
+
     fun start(job: String): Boolean = jobs.start(job)
     fun fallbackLauncher(job: String): String? = jobs.fallbackLauncher(job)
     fun status(job: String): RootJobs.Status? = jobs.status(job)
     fun clear(job: String) = jobs.clear(job)
+    fun drop(job: String) = jobs.drop(job)
+    /** A job was prepared and not seen to its end. */
+    fun pending(job: String): Boolean = jobs.currentJob(job) != null
 
     /** The backup's files: abl_a.img, abl_b.img, info.txt. */
     private fun backupFiles(): List<File> =
         backupDir?.listFiles()?.filter { it.isFile }?.sortedBy { it.name }.orEmpty()
 
     /** A name for copies of this backup, e.g. "KONKR Pocket FIT 2026-10-09_131500". */
-    fun backupName(): String = "PB-OS ABL backup - $deviceName - ${backupDir?.name.orEmpty()}"
+    fun backupName(stamp: String = backupDir?.name.orEmpty()): String = "PB-OS ABL backup - $deviceName - $stamp"
 
     /** Copies the backup to Documents/PB-OS/ABL backup/<name>/ (stays on the handheld). */
     fun copyToDocuments(): String {
@@ -124,66 +195,5 @@ class AblSetup(private val context: Context, private val info: DeviceInfo, priva
             }
             md.digest().joinToString("") { "%02x".format(it) }
         }
-    }
-}
-
-/** Boot loaders the app knows. Stock ones are the makers' (never shipped, only their checksums). */
-object AblKnown {
-    data class Payload(val asset: String, val bytes: Long, val sha256: String, val label: String)
-
-    /**
-     * The boot menu the app installs: OpenABL 1.2, bundled unchanged from
-     * github.com/project-barry/OpenABL release v1.2 (the Open Handheld Collective's
-     * v1.1 plus a fix for an occasional freeze on the logo at startup; each file
-     * matches its .sha256 and GitHub's asset digest).
-     * 532480 bytes, so it fits the 1 MiB abl partitions; the install script checks.
-     */
-    const val BUNDLED = "OpenABL 1.2"
-    val payload = mapOf(
-        Soc.SM8550 to Payload("abl/openabl-1.2/abl_signed-SM8550.elf", 532480, "c7d681004563b69d892b5f93d3fac66a5f555c273c39ebf05febc72f95699df8", BUNDLED),
-        Soc.SM8650 to Payload("abl/openabl-1.2/abl_signed-SM8650.elf", 532480, "c32434666ad5c725caa149151cfc5a66918c40f05e3f692c93795481910a6422", BUNDLED),
-    )
-
-    /**
-     * Boot menus, by the SHA-256 of their first [AblScript.Known.bytes] bytes (the rest
-     * of the partition keeps what was there before). OpenABL 1.0 for SM8550 is left
-     * out: its release .sha256 file doesn't match its .elf.
-     */
-    val menus = mapOf(
-        Soc.SM8550 to listOf(
-            AblScript.Known(BUNDLED, "c7d681004563b69d892b5f93d3fac66a5f555c273c39ebf05febc72f95699df8", 532480),
-            AblScript.Known("OpenABL 1.1", "cd97748bbd1c5dc994b8a73a05e88955297f4c88384e3ca4028d043fc1b16848", 532480),
-            AblScript.Known("ROCKNIX 1.2", "8c27a70961476b327071ada2fd9b9c55dd2dcdc913eff3d33f2576133d7e398c", 258048),
-            AblScript.Known("ROCKNIX 1.1.8", "5f1018211feaa109563d5890ab52dccfb31db90f4bbe9e6b7fb39e94f860f8d4", 258048),
-        ),
-        Soc.SM8650 to listOf(
-            AblScript.Known(BUNDLED, "c32434666ad5c725caa149151cfc5a66918c40f05e3f692c93795481910a6422", 532480),
-            AblScript.Known("OpenABL 1.1", "8fd6a18ec30a8c24751b7db73a6ecb0d9df9f2e1432973273d572841ff3f6216", 532480),
-            AblScript.Known("OpenABL 1.0", "23046d198dddaab53d7afc17bd726de4d2c65b6eb24d984a6b72e9a0963ba32c", 532480),
-            AblScript.Known("ROCKNIX 1.2", "053e1e9e8300c29de68866c6c09e5527b1222d2ee774757d9cfbe8346137d6b6", 258048),
-            AblScript.Known("ROCKNIX 1.1.8", "4ed04dda4da2ac76bc27925ae68094c055a043697f1a1bee4b958b979905bed5", 258048),
-        ),
-    )
-
-    /** Stock boot loaders seen on our handhelds, by the SHA-256 of the whole 1 MiB partition. */
-    val stock = listOf(
-        AblScript.Known("Retroid Pocket Nova (firmware 2026-07-22)", "39615e0d5d6302a512c30c78e49c50004d331de30a3e0b07f619ff5b979e280a", null),
-        AblScript.Known("KONKR Pocket FIT (firmware 2025-12-26)", "739202be4e3f781d0a5e0321c5923f05b66da694f59ae90745e0054b2cb02537", null),
-        AblScript.Known("AYN Thor (firmware 2026-02-06)", "dcb65f18445d99ede96f7d613931fa1fb1b19f30076a117c9c47df7ad967151d", null),
-    )
-
-    /** The bundled menu on both slots means there is nothing to install. */
-    fun alreadyInstalled(slotA: String?, slotB: String?): Boolean =
-        slotA == AblScript.MENU + BUNDLED && slotB == AblScript.MENU + BUNDLED
-
-    /** "OpenABL 1.1 boot menu (older version)": an OpenABL other than the bundled one is called older. */
-    fun menuLabel(menu: String): String =
-        if (menu.startsWith("OpenABL ") && menu != BUNDLED) "$menu boot menu (older version)" else "$menu boot menu"
-
-    /** "menu: OpenABL 1.2" → "OpenABL 1.2"; also reads "rocknix: …" from app versions before 0.4. */
-    fun menuName(slot: String): String? = when {
-        slot.startsWith(AblScript.MENU) -> slot.removePrefix(AblScript.MENU)
-        slot.startsWith("rocknix: ") -> slot.removePrefix("rocknix: ")
-        else -> null
     }
 }

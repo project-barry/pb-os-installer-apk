@@ -4,6 +4,7 @@ package org.projectbarry.pbosinstaller.device
 enum class Soc(val label: String) {
     SM8550("Snapdragon 8 Gen 2 (SM8550)"),
     SM8650("Snapdragon 8 Gen 3 (SM8650)"),
+    SM7750("Snapdragon 7 Gen 4 (SM7750)"),
 }
 
 object SocCheck {
@@ -14,6 +15,9 @@ object SocCheck {
      * name (the RP6 and Nova say "QCS8550"), others may report "SM8550".
      * [boardPlatform] (ro.board.platform) is only used when the model is
      * missing: kalama = SM8550, pineapple = SM8650.
+     *
+     * SM7750 goes by its model alone (the Retroid Pocket Duo says "CQ7790S"): its
+     * platform, sun, is the 8 Elite's (SM8750) too, which stays refused.
      */
     fun identify(socModel: String?, boardPlatform: String?): Soc? {
         val model = socModel.orEmpty().trim().uppercase()
@@ -21,6 +25,7 @@ object SocCheck {
             return when {
                 model.startsWith("SM8550") || model.startsWith("QCS8550") -> Soc.SM8550
                 model.startsWith("SM8650") || model.startsWith("QCS8650") -> Soc.SM8650
+                model.startsWith("SM7750") || model.startsWith("CQ7790") -> Soc.SM7750
                 else -> null
             }
         }
